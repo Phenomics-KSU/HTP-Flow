@@ -5,18 +5,15 @@ import os
 import argparse
 
 # import the necessary things for OpenCV
-import cv2.cv as cv
-
-# definition of some colors
-_red =  (0, 0, 255, 0);
-_green =  (0, 255, 0, 0);
-_white = cv.RealScalar (255)
-_black = cv.RealScalar (0)
+import cv2 as cv
+import numpy as np
 
 class ImageItem:
 
     # Types of different image items.
-    _QR_ITEM = 0;
+    types = dict( 
+                  qr = dict(index=0, group_name='QR_Items'),
+    )
     
     def __init__(self, item_type, extracted_image, parent_filename, coordinates):
         _type = item_type
@@ -26,25 +23,45 @@ class ImageItem:
 
 def locate_qr_items(image, image_filename, resolution, qr_size):
 
-    # grayscale
+    # Grayscale original image so we can find edges in it. Default for OpenCV is BGR not RGB.
+    gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 
-    # gaussian blur
+    # Need to blur image before running edge detector to avoid a bunch of small edges due to noise.
+    blurred_image = cv.GaussianBlur(gray_image, (5,5), 0)
     
-    # canny
+    # Canny will output a binary image where white = edges and black = background.
+    edge_image = cv.Canny(blurred_image, 100, 200)
     
-    # iterate contours and draw rotated bounding boxes for each one
+    # Find contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
+    storage = cv.CreateMemStorage (0)
+    contours = cv.FindContours(edge_image, storage, cv.CV_RETR_TREE, cv.CV_CHAIN_APPROX_SIMPLE, (0,0))
+    contours = cv.approxPolyDP(contours, storage, cv.CV_POLY_APPROX_DP, 3, 1)
     
-    # check if width and height are within threshold of qr size
+    # Create rotated bounding rectangle for each contour.
+    bounding_rectangles = [cv.minAreaRect(contour) for contour in contours]
     
-    # if they are then extract image and coordinates and create a new image item instance
-
-    return [] # list of image items
+    # Remove any rectangles that couldn't be a QR item based off specified side length.
+    filtered_rectangles = filter_by_size(bounding_rectangles, resolution, qr_size)
+    
+    qr_items = []
+    
+    # Convert remaining bounding rectangles into image items.
+    for filtered_rectangle in filtered_rectangles:
+        extracted_image = extract_image(filtered_rectangle, padding, image)
+        
+        coordinates = (0, 0)
+        
+        image_type = ImageItem.types['qr']
+        
+        qr_items.append(image_type, extracted_image, image_filename, coordinates)
+        
+    return qr_items
 
 def search_images_for_items(input_directory, find_qr_items, qr_size):
 
     image_filenames = []
     for fname in os.listdir(input_directory):
-        if fname.endswith('.tiff') or fname.endswith('.tif') or fname.endswith('.jpg') or fname.endswith('png'): 
+        if fname.endswith('.tiff') or fname.endswith('.tif') or fname.endswith('.jpg') or fname.endswith('.png'): 
             image_filenames.append(fname)
             
     if len(image_filenames) == 0:
@@ -63,13 +80,13 @@ def search_images_for_items(input_directory, find_qr_items, qr_size):
         
         full_filename = os.path.join(input_directory, filename)
         
-        resolution = calculate_resolution(full_filename);
+        resolution = calculate_resolution(full_filename, 15000) # TODO specify altitude
         
         if resolution <= 0:
             print "Cannot calculate resolution of image. Make sure camera model is defined."
             continue
         
-        image = cv.LoadImage(full_filename, cv.CV_LOAD_IMAGE_COLOR)
+        image = cv.LoadImage(full_filename, cv.CV_LOAD_IMAGE_ANYDEPTH)
         
         if find_qr_items:
             qr_items = locate_qr_items(image, filename, resolution, qr_size)
@@ -78,14 +95,69 @@ def search_images_for_items(input_directory, find_qr_items, qr_size):
             
     return [all_qr_items]    
 
-def calculate_resolution(filename):
+def calculate_resolution(image_filename, altitude):
+    
+    # Pull out focal length and image width from metadata.
+    focal_length = 5
+    image_width_in_pixels = 4000
+    
+    # Focal lengths are usually specified in 'mm' but for some reason some cameras multiply
+    # this by 1000.  So 5mm = 5000.  Since there shouldn't be a real focal length longer than
+    # a 1 meter. Therefore we need to scale down any large focal lengths by a factor of 1000.
+    if focal_length >= 1000:
+        focal_length /= 1000
+        
+    # Sensor width in millimeters (same as focal length).  TODO: let user specify this somewhere.
+    sensor_width = 7.6
+    
+    # Avoid division by zero.
+    if focal_length <= 0:
+        return 0
+        
+    # The horizontal field of view (in same units as altitude, which should be centimeters) 
+    # can be found by simply using the ratio of focal length and sensor size.
+    hfov = altitude * (sensor_width / focal_length)
+    
+    # Avoid division by zero.
+    if image_width_in_pixels == 0:
+        return 0
+    
+    return hfov / image_width_in_pixels  # cm per pixel
 
+def extract_image(rectangle, pad, image):
+    
+    # reference properties of rotated bounding rectangle
+    x = rectangle[0].x
+    y = rectangle[0].y
+    w = rectangle[1].w
+    h = rectangle[1].h
+    
+    # add in pad to rectangle and respect image boundaries
+    top = max(1, y - pad)
+    bottom = min(image.h - 1, y + h + pad)
+    left = max(1, x - pad)
+    right = min(image.w - 1, x + w + pad)
+    
+    return image[top:bottom, left:right]
+    
+def write_items(output_directory, items_list):
+    
+    for items in items_list:
 
-    
-def write_items(output_directory, items):  
-    
-    return
-    
+        if len(items) == 0: continue
+        
+        set_type = items.type['group_name']
+        
+        sub_directory = os.path.join(output_directory, set_type)
+        
+        if not os.path.exists(sub_directory):
+            os.path.makedirs(sub_directory)
+                
+        for i, item in enumerate(items):
+            item_filename = "{0}_{1}.{2}".format(set_type, i, os.path.splitext(item.parent_filename)[1])
+                
+            cv.imwrite(item_filename, item.image)
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Extract specified items from a set of aerial images.')
@@ -95,7 +167,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
-    qr_size = float(args.qr_size);
+    qr_size = float(args.qr_size)
     
     find_qr = qr_size > 0
     
@@ -107,125 +179,3 @@ if __name__ == '__main__':
     items = search_images_for_items(args.input_directory, find_qr, qr_size)
     
     write_items(args.output_directory, items)
-    
-    '''
-# the callback on the trackbar, to set the level of contours we want
-# to display
-def on_trackbar (position):
-
-    # create the image for putting in it the founded contours
-    contours_image = cv.CreateImage ( (_SIZE, _SIZE), 8, 3)
-
-    # compute the real level of display, given the current position
-    levels = position - 3
-
-    # initialisation
-    _contours = contours
-
-    if levels <= 0:
-        # zero or negative value
-        # => get to the nearest face to make it look more funny
-        _contours = contours.h_next().h_next().h_next()
-
-    # first, clear the image where we will draw contours
-    cv.SetZero (contours_image)
-
-    # draw contours in red and green
-    cv.DrawContours (contours_image, _contours,
-                       _red, _green,
-                       levels, 3, cv.CV_AA,
-                        (0, 0))
-
-    # finally, show the image
-    cv.ShowImage ("contours", contours_image)
-
-if __name__ == '__main__':
-
-    # create the image where we want to display results
-    image = cv.CreateImage ( (_SIZE, _SIZE), 8, 1)
-
-    # start with an empty image
-    cv.SetZero (image)
-
-    # draw the original picture
-    for i in range (6):
-        dx = (i % 2) * 250 - 30
-        dy = (i / 2) * 150
-
-        cv.Ellipse (image,
-                       (dx + 150, dy + 100),
-                       (100, 70),
-                      0, 0, 360, _white, -1, 8, 0)
-        cv.Ellipse (image,
-                       (dx + 115, dy + 70),
-                       (30, 20),
-                      0, 0, 360, _black, -1, 8, 0)
-        cv.Ellipse (image,
-                       (dx + 185, dy + 70),
-                       (30, 20),
-                      0, 0, 360, _black, -1, 8, 0)
-        cv.Ellipse (image,
-                       (dx + 115, dy + 70),
-                       (15, 15),
-                      0, 0, 360, _white, -1, 8, 0)
-        cv.Ellipse (image,
-                       (dx + 185, dy + 70),
-                       (15, 15),
-                      0, 0, 360, _white, -1, 8, 0)
-        cv.Ellipse (image,
-                       (dx + 115, dy + 70),
-                       (5, 5),
-                      0, 0, 360, _black, -1, 8, 0)
-        cv.Ellipse (image,
-                       (dx + 185, dy + 70),
-                       (5, 5),
-                      0, 0, 360, _black, -1, 8, 0)
-        cv.Ellipse (image,
-                       (dx + 150, dy + 100),
-                       (10, 5),
-                      0, 0, 360, _black, -1, 8, 0)
-        cv.Ellipse (image,
-                       (dx + 150, dy + 150),
-                       (40, 10),
-                      0, 0, 360, _black, -1, 8, 0)
-        cv.Ellipse (image,
-                       (dx + 27, dy + 100),
-                       (20, 35),
-                      0, 0, 360, _white, -1, 8, 0)
-        cv.Ellipse (image,
-                       (dx + 273, dy + 100),
-                       (20, 35),
-                      0, 0, 360, _white, -1, 8, 0)
-
-    # create window and display the original picture in it
-    cv.NamedWindow ("image", 1)
-    cv.ShowImage ("image", image)
-
-    # create the storage area
-    storage = cv.CreateMemStorage (0)
-
-    # find the contours
-    contours = cv.FindContours(image,
-                               storage,
-                               cv.CV_RETR_TREE,
-                               cv.CV_CHAIN_APPROX_SIMPLE,
-                               (0,0))
-
-    # comment this out if you do not want approximation
-    contours = cv.ApproxPoly (contours,
-                                storage,
-                                cv.CV_POLY_APPROX_DP, 3, 1)
-
-    # create the window for the contours
-    cv.NamedWindow ("contours", 1)
-
-    # create the trackbar, to enable the change of the displayed level
-    cv.CreateTrackbar ("levels+3", "contours", 3, 7, on_trackbar)
-
-    # call one time the callback, so we will have the 1st display done
-    on_trackbar (_DEFAULT_LEVEL)
-
-    # wait a key pressed to end
-    cv.WaitKey (0)
-    cv.DestroyAllWindows()
-'''
