@@ -8,7 +8,7 @@ import argparse
 import cv2 as cv
 import numpy as np
 
-from geo_image import GeoImage
+from data import *
 
 class ImageItem:
 
@@ -23,7 +23,7 @@ class ImageItem:
         _parent_filename = parent_filename
         _coordinates = coordinates
 
-def locate_qr_items(image, image_filename, resolution, qr_size):
+def extract_items(image, image_filename, resolution, qr_size):
 
     # Grayscale original image so we can find edges in it. Default for OpenCV is BGR not RGB.
     gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
@@ -35,21 +35,21 @@ def locate_qr_items(image, image_filename, resolution, qr_size):
     edge_image = cv.Canny(blurred_image, 100, 200)
     
     # Find contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
-    storage = cv.CreateMemStorage (0)
-    contours = cv.FindContours(edge_image, storage, cv.CV_RETR_TREE, cv.CV_CHAIN_APPROX_SIMPLE, (0,0))
-    contours = cv.approxPolyDP(contours, storage, cv.CV_POLY_APPROX_DP, 3, 1)
+    contours, hierarchy = cv.findContours(edge_image, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    contours = cv.approxPolyDP(contours, .1)
     
     # Create rotated bounding rectangle for each contour.
     bounding_rectangles = [cv.minAreaRect(contour) for contour in contours]
     
     # Remove any rectangles that couldn't be a QR item based off specified side length.
-    filtered_rectangles = filter_by_size(bounding_rectangles, resolution, qr_size)
+    #filtered_rectangles = filter_by_size(bounding_rectangles, resolution, qr_size)
     
     qr_items = []
     
     # Convert remaining bounding rectangles into image items.
-    for filtered_rectangle in filtered_rectangles:
-        extracted_image = extract_image(filtered_rectangle, padding, image)
+    for filtered_rectangle in bounding_rectangles:
+        
+        extracted_image = extract_image(filtered_rectangle, 20, image)
         
         coordinates = (0, 0)
         
@@ -143,7 +143,8 @@ if __name__ == '__main__':
     
     image_filenames = []
     for fname in os.listdir(image_directory):
-        if fname.endswith('.tiff') or fname.endswith('.tif') or fname.endswith('.jpg') or fname.endswith('.png'): 
+        extension = os.path.splitext(fname)[1][1:]
+        if extension.lower() in ['tiff', 'tif', 'jpg', 'jpeg', 'png']:
             image_filenames.append(fname)
         else:
             print 'Skipping file {0} due to unsupported extension'.format(fname)
@@ -173,6 +174,8 @@ if __name__ == '__main__':
                 y = fields[3]
                 z = fields[4]
                 heading = fields[5]
+                # Make sure filename doesn't have extension, we'll add it from image that's we're processing.
+                image_name = os.path.splitext(image_name)[0]
             except IndexError:
                 print 'Bad line: {0}'.format(line) 
                 continue
@@ -184,16 +187,23 @@ if __name__ == '__main__':
     
     missing_image_count = 0
     for geo_image in images:
-        if not geo_image.file_name in image_filenames:
+        image_filenames_no_ext = [os.path.splitext(fname)[0] for fname in image_filenames]
+        try:
+            # Make sure actual image exists and use it's file extension.
+            index = image_filenames_no_ext.index(geo_image.file_name)
+            extension = os.path.splitext(image_filenames[index])[1][1:]
+            geo_image.file_name = "{0}.{1}".format(geo_image.file_name, extension)
+        except ValueError:
+            # Geo image doesn't have corresponding actual image
             missing_image_count += 1
-            
+           
     if missing_image_count > 0:
-        "Warning {0} geo images do not exist and will be skipped.".format(missing_image_count)
+        print "Warning {0} geo images do not exist and will be skipped.".format(missing_image_count)
 
     need_to_start_new_row = True
     in_row = True
     
-    for i, image in enumerate(images):
+    for i, geo_image in enumerate(images):
         
         if need_to_start_new_row:
             print "Starting row {0}".format(current_row_num)
@@ -206,22 +216,25 @@ if __name__ == '__main__':
         
         print "Analyzing image [{0}/{1}]".format(i+1, len(images))
         
-        full_filename = os.path.join(image_directory, image.file_name)
+        full_filename = os.path.join(image_directory, geo_image.file_name)
         
-        cv_image = cv.LoadImage(full_filename, cv.CV_LOAD_IMAGE_ANYDEPTH)
+        # Image read
+        image = cv.imread(full_filename, cv.CV_LOAD_IMAGE_UNCHANGED)
+        #cv_image = cv.LoadImage(full_filename, cv.CV_LOAD_IMAGE_ANYDEPTH)
         
-        resolution = calculate_resolution(full_filename, camera_height, cv_image.w, sensor_width, focal_length)
+        image_width = image.shape[1]
+        resolution = calculate_resolution(full_filename, camera_height, image_width, sensor_width, focal_length)
         
         if resolution <= 0:
-            print "Cannot calculate image resolution."
+            print "Cannot calculate image resolution. Skipping image."
             continue
         
         #i.    Extract possible QR codes, plants and blue sticks and assign X,Y,Z and row to each object.
         #ii.    Order objects sequentially from bottom to top.
         # iii.    Pass into Z-bar library to read QRs and remove and false positives.
-        (marked_image, image_items) = extract_items(image, cv_image, resolution, qr_size)
+        (marked_image, image_items) = extract_items(geo_image, image, resolution, qr_size)
 
-        qr_names = [item.name for item in image_items if "code" in lower(item.type)] 
+        qr_names = [item.name for item in image_items if "code" in item.type.lower()] 
         
         if not in_row:
             if "start" in qr_names:
@@ -234,10 +247,5 @@ if __name__ == '__main__':
 
         if "end" in qr_names:
             need_to_start_new_row = True
-
-        # if 
-        # vi.    If we’ve hit a start QR code keep adding heading to running average.  (also do check for robot turning)
-        
-        # vii.    Save marked up image to ‘row1/image-001’ and then create a directory with same name and store sub images in there ‘row1/image-001/plant-1’
 
     write_items(args.output_directory, items)
