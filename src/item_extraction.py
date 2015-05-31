@@ -58,13 +58,10 @@ class QRLocator:
         gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     
         # Need to blur image before running edge detector to avoid a bunch of small edges due to noise.
-        blurred_image = cv.GaussianBlur(gray_image, (5,5), 0)
-        
-        # Canny will output a binary image where white = edges and black = background.
-        edge_image = cv.Canny(blurred_image, 100, 200)
+        _, thresh_image = cv.threshold(gray_image, 150, 255, 0)
         
         # Find outer contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
-        contours, hierarchy = cv.findContours(edge_image.copy(), cv.cv.CV_RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+        contours, hierarchy = cv.findContours(thresh_image.copy(), cv.cv.CV_RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
         contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
         
         # Create bounding box for each contour.
@@ -74,6 +71,11 @@ class QRLocator:
         min_qr_size = self.qr_size * 0.3
         max_qr_size = self.qr_size * 2.5
         filtered_rectangles = filter_by_size(bounding_rectangles, geo_image.resolution, min_qr_size, max_qr_size)
+        
+        if ImageWriter.level <= ImageWriter.DEBUG:
+            # Debug save intermediate images
+            thresh_filename = postfix_filename(geo_image.file_name, 'thresh')
+            ImageWriter.save_debug(thresh_filename, thresh_image)
         
         # Scan each rectangle with QR reader to remove false positives and also extract data from code.
         qr_items = []
