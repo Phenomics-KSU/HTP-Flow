@@ -92,7 +92,7 @@ if __name__ == '__main__':
         
         full_filename = os.path.join(image_directory, geo_image.file_name)
         
-        image = cv.imread(full_filename, cv.CV_LOAD_IMAGE_UNCHANGED)
+        image = cv.imread(full_filename, cv.CV_LOAD_IMAGE_COLOR)
 
         if image is None:
             print 'Cannot open image: {0}'.format(full_filename)

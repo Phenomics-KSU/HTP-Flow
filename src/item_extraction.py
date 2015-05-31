@@ -41,7 +41,7 @@ class ItemExtractor:
             extracted_image_path = ImageWriter.save_normal(extracted_image_fname, extracted_image)
             
             item.image_path = extracted_image_path
-
+            
         #TODO sort field items
         
         return field_items
@@ -63,12 +63,11 @@ class QRLocator:
         # Canny will output a binary image where white = edges and black = background.
         edge_image = cv.Canny(blurred_image, 100, 200)
         
-        # Find contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
-        contours, hierarchy = cv.findContours(edge_image, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        # Find outer contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
+        contours, hierarchy = cv.findContours(edge_image.copy(), cv.cv.CV_RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
         contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
         
-        # Create rotated bounding rectangle for each contour.
-        #bounding_rectangles = [cv.minAreaRect(contour) for contour in contours]
+        # Create bounding box for each contour.
         bounding_rectangles = [cv.boundingRect(contour) for contour in contours]
         
         # Remove any rectangles that couldn't be a QR item based off specified side length.
@@ -128,26 +127,44 @@ class PlantLocator:
     def locate(self, geo_image, image, marked_image):
         '''Find plants in image and return list of Plant instances.''' 
         # Grayscale original image so we can find edges in it. Default for OpenCV is BGR not RGB.
-        green_channel = cv.split(image)[1]
- 
-        # Need to blur image before running edge detector to avoid a bunch of small edges due to noise.
-        blurred_image = cv.GaussianBlur(green_channel, (5,5), 0)
+        #blue_channel, green_channel, red_channel = cv.split(image)
         
-        # Canny will output a binary image where white = edges and black = background.
-        edge_image = cv.Canny(blurred_image, 100, 200)
+        # Convert Blue-Green-Red color space to HSV
+        hsv_image = cv.cvtColor(image, cv.COLOR_BGR2HSV)
+            
+        # Define range of green colors in HSV that corresponds with plants.
+        green_hue = 60
+        lower_green = np.array([green_hue - 30, 50, 50], np.uint8)
+        upper_green = np.array([green_hue + 30, 255, 255], np.uint8)
+    
+        # Threshold the HSV image to get only green colors
+        green_mask = cv.inRange(hsv_image, lower_green, upper_green)
         
-        # Find contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
-        contours, hierarchy = cv.findContours(edge_image, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        # Find outer contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
+        contours, hierarchy = cv.findContours(green_mask.copy(), cv.cv.CV_RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
         contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
         
-        # Create rotated bounding rectangle for each contour.
-        #bounding_rectangles = [cv.minAreaRect(contour) for contour in contours]
+        # Create bounding box for each contour.
         bounding_rectangles = [cv.boundingRect(contour) for contour in contours]
         
         # Remove any rectangles that couldn't be a plant based off specified size
         min_plant_size = self.plant_size * 0.2
         max_plant_size = self.plant_size * 3
         filtered_rectangles = filter_by_size(bounding_rectangles, geo_image.resolution, min_plant_size, max_plant_size)
+        
+        if ImageWriter.level <= ImageWriter.DEBUG:
+            # Debug save intermediate images
+            '''
+            hue, saturation, value = cv.split(hsv_image)
+            hue_filename = postfix_filename(geo_image.file_name, 'hue_channel')
+            ImageWriter.save_debug(hue_filename, hue)
+            saturation_filename = postfix_filename(geo_image.file_name, 'saturation_channel')
+            ImageWriter.save_debug(saturation_filename, saturation)
+            value_filename = postfix_filename(geo_image.file_name, 'value_channel')
+            ImageWriter.save_debug(value_filename, value)
+            '''
+            edge_filename = postfix_filename(geo_image.file_name, 'edges')
+            ImageWriter.save_debug(edge_filename, green_mask)
         
         plants = []
         for i, rectangle in enumerate(filtered_rectangles):
