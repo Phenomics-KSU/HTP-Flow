@@ -12,22 +12,23 @@ import Image
 
 from data import *
 
-#class ItemMarker
-
 class ItemExtractor:
     
     def __init__(self, locators):
         self.locators = locators
     
-    def extract_items(self, geo_image, image, out_directory):
+    def extract_items(self, geo_image, image, marked_image, out_directory):
+    
+        if marked_image is not None:
+            # Show what 1" is on the top-left of the image.
+            pixels = int(2.54 / geo_image.resolution)
+            cv.rectangle(marked_image, (1,1), (pixels, pixels), (255,255,255), 2) 
     
         field_items = []
-        failed_items = []
     
         for locator in self.locators:
-            located_items, failed_items = locator.locate(geo_image, image)
+            located_items = locator.locate(geo_image, image, marked_image)
             field_items.extend(located_items)
-            failed_items.extend(failed_items)
 
         # Extract field items into own image
         for item in field_items:
@@ -51,7 +52,7 @@ class QRLocator:
     def __init__(self, qr_size):
         self.qr_size = qr_size
     
-    def locate(self, geo_image, image):
+    def locate(self, geo_image, image, marked_image):
 
         # Grayscale original image so we can find edges in it. Default for OpenCV is BGR not RGB.
         gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
@@ -77,20 +78,26 @@ class QRLocator:
         
         # Scan each rectangle with QR reader to remove false positives and also extract data from code.
         qr_items = []
-        failed_items = []
+
         for rectangle in filtered_rectangles:
             extracted_image = extract_image(rectangle, 30, image)
-            qr_data = self.scan_image(extracted_image)
-            
-            qr_item = FieldItem(item_type = 'code', name = 'default', parent_image = geo_image.file_name, bounding_rect = rectangle)
-            
-            if len(qr_data) != 0:
+            qr_data = self.scan_image(extracted_image)            
+            scan_successful = len(qr_data) != 0
+
+            if scan_successful:
+                qr_item = FieldItem(item_type = 'code', name = 'default', parent_image = geo_image.file_name, bounding_rect = rectangle)
                 qr_item.name = qr_data[0]
                 qr_items.append(qr_item)
-            else:
-                failed_items.append(qr_item)
+                
+            if marked_image is not None:
+                # Show success/failure using colored bounding box.
+                green = (0, 255, 0)
+                red = (0, 0, 255)
+                item_color = green if scan_successful else red
+                x,y,w,h = rectangle
+                cv.rectangle(marked_image,(x,y),(x+w,y+h),item_color,2) 
         
-        return qr_items, failed_items
+        return qr_items
     
     def scan_image(self, cv_image):
         '''Scan image with Zbar and return data found in visual code(s)'''

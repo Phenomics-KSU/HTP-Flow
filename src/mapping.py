@@ -24,6 +24,7 @@ if __name__ == '__main__':
     parser.add_argument('-ch', dest='camera_height', default=0, help='camera height in centimeters. Must be > 0')
     parser.add_argument('-sw', dest='sensor_width', default=0, help='Sensor width in same units as focal length. Must be > 0')
     parser.add_argument('-fl', dest='focal_length', default=0, help='effective focal length in same units as sensor width. Must be > 0')
+    parser.add_argument('-mk', dest='marked_image', default=False, help='If true then will output marked up image.  Default false.')
 
     args = parser.parse_args()
     
@@ -36,6 +37,7 @@ if __name__ == '__main__':
     camera_height = float(args.camera_height)
     sensor_width = float(args.sensor_width)
     focal_length = float(args.focal_length)
+    use_marked_image = args.marked_image
     
     if qr_size <= 0 or camera_height <= 0 or sensor_width <= 0 or focal_length <= 0:
         print "\nError: One or more arguments were not greater than zero.\n"
@@ -75,7 +77,7 @@ if __name__ == '__main__':
                 image_time = fields[1]
                 x, y, z = fields[2 : 5]
                 heading = fields[5]
-                # Make sure filename doesn't have extension, we'll add it from image that's we're processing.
+                # Make sure filename doesn't have extension, we'll add it from image that we're processing.
                 image_name = os.path.splitext(image_name)[0]
             except IndexError:
                 print 'Bad line: {0}'.format(line) 
@@ -141,12 +143,23 @@ if __name__ == '__main__':
         if not os.path.exists(image_out_directory):
                 os.makedirs(image_out_directory)
 
-        items = item_extractor.extract_items(geo_image, image, image_out_directory)
+        marked_image = None
+        if use_marked_image:
+            # Copy original image so we can mark on it for debugging.
+            marked_image = image.copy()
+
+        items = item_extractor.extract_items(geo_image, image, marked_image, image_out_directory)
         
         print 'Found {0} items.'.format(len(items))
         for item in items:
             print item
-            
+
+        if marked_image is not None:
+            filename, extension = os.path.splitext(geo_image.file_name)
+            marked_image_filename = "{0}_marked{1}".format(filename, extension)
+            marked_image_path = os.path.join(row_directory, marked_image_filename)
+            cv.imwrite(marked_image_path, marked_image)
+
         continue
         
         qr_names = [item.name for item in image_items if "code" in item.type.lower()] 
