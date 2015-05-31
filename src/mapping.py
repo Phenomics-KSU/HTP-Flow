@@ -23,6 +23,7 @@ if __name__ == '__main__':
     parser.add_argument('starting_row_number', help='Row number for starting images')
     parser.add_argument('row_skip_number', help='How many rows to skip when moving to next row')
     parser.add_argument('-qr', dest='qr_size', default=0, help='side length of QR item in centimeters. Must be > 0')
+    parser.add_argument('-ps', dest='plant_size', default=0, help='Estimated plant size in centimeters. Must be > 0')
     parser.add_argument('-ch', dest='camera_height', default=0, help='camera height in centimeters. Must be > 0')
     parser.add_argument('-sw', dest='sensor_width', default=0, help='Sensor width in same units as focal length. Must be > 0')
     parser.add_argument('-fl', dest='focal_length', default=0, help='effective focal length in same units as sensor width. Must be > 0')
@@ -37,12 +38,13 @@ if __name__ == '__main__':
     start_row_num = int(args.starting_row_number)
     row_skip_num = int(args.row_skip_number)
     qr_size = float(args.qr_size)
+    plant_size = float(args.plant_size)
     camera_height = float(args.camera_height)
     sensor_width = float(args.sensor_width)
     focal_length = float(args.focal_length)
     use_marked_image = args.marked_image
     
-    if qr_size <= 0 or camera_height <= 0 or sensor_width <= 0 or focal_length <= 0:
+    if qr_size <= 0 or plant_size <= 0 or camera_height <= 0 or sensor_width <= 0 or focal_length <= 0:
         print "\nError: One or more arguments were not greater than zero.\n"
         parser.print_help()
         sys.exit(1)
@@ -70,7 +72,10 @@ if __name__ == '__main__':
     in_row = True
     
     qr_locator = QRLocator(qr_size)
-    item_extractor = ItemExtractor([qr_locator])
+    plant_locator = PlantLocator(plant_size)
+    item_extractor = ItemExtractor([qr_locator, plant_locator])
+    
+    ImageWriter.level = ImageWriter.DEBUG
     
     for i, geo_image in enumerate(geo_images):
         
@@ -100,10 +105,9 @@ if __name__ == '__main__':
             print "Cannot calculate image resolution. Skipping image."
             continue
         
-        # Create output directory for each image so we can store things we find there.
+        # Specify 'image directory' so that if any images associated with current image are saved a directory is created.
         image_out_directory = os.path.join(row_directory, os.path.splitext(geo_image.file_name)[0])
-        if not os.path.exists(image_out_directory):
-                os.makedirs(image_out_directory)
+        ImageWriter.output_directory = image_out_directory
 
         marked_image = None
         if use_marked_image:
@@ -117,8 +121,7 @@ if __name__ == '__main__':
             print "Type: {0} Name: {1}".format(item.item_type, item.name)
 
         if marked_image is not None:
-            filename, extension = os.path.splitext(geo_image.file_name)
-            marked_image_filename = "{0}_marked{1}".format(filename, extension)
+            marked_image_filename = postfix_filename(geo_image.file_name, '_marked')
             marked_image_path = os.path.join(row_directory, marked_image_filename)
             cv.imwrite(marked_image_path, marked_image)
 

@@ -3,11 +3,50 @@
 import sys
 import os
 
-# Project imporst
+# OpenCV imports
+import cv2 as cv
+
+# Project imports
 from data import *
 
+class ImageWriter:
+    '''Facilitate writing output images to an output directory.'''
+    DEBUG = 0
+    NORMAL = 1
+    
+    level = DEBUG
+    output_directory = './'
+
+    @staticmethod
+    def save_debug(filename, image):
+        return ImageWriter.save(filename, image, ImageWriter.DEBUG)
+
+    @staticmethod
+    def save_normal(filename, image):
+        return ImageWriter.save(filename, image, ImageWriter.NORMAL)
+
+    @staticmethod
+    def save(filename, image, level):
+        '''Save image if the specified level is above current output level.'''
+        if level < ImageWriter.level:
+            return
+
+        filepath = os.path.join(ImageWriter.output_directory, filename)
+        if not os.path.exists(os.path.dirname(filepath)):
+            os.makedirs(os.path.dirname(filepath))
+            
+        cv.imwrite(filepath, image)
+        
+        return filepath
+
+def postfix_filename(filename, postfix):
+    '''Return post-fixed file name with original extension.'''
+    filename, extension = os.path.splitext(filename)
+    postfixed_name = "{0}{1}{2}".format(filename, postfix, extension)
+    return postfixed_name
+
 def read_images(image_directory, extensions):
-    '''Return list of images with specified extensions.'''
+    '''Return list of images with specified extensions inside of directory.'''
     image_filenames = []
     for fname in os.listdir(image_directory):
         extension = os.path.splitext(fname)[1][1:]

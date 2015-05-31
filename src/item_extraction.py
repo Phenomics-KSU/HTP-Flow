@@ -12,6 +12,7 @@ import Image # Python Imaging Library
 
 # Project imports
 from data import *
+from image_utils import *
 
 class ItemExtractor:
     '''Extracts field items from image.'''    
@@ -37,9 +38,7 @@ class ItemExtractor:
             extracted_image = extract_image(item.bounding_rect, 20, image)
             
             extracted_image_fname = "{0}_{1}.jpg".format(item.item_type, item.name)
-            extracted_image_path = os.path.join(out_directory, extracted_image_fname)
-            
-            cv.imwrite(extracted_image_path, extracted_image)
+            extracted_image_path = ImageWriter.save_normal(extracted_image_fname, extracted_image)
             
             item.image_path = extracted_image_path
 
@@ -95,7 +94,7 @@ class QRLocator:
                 red = (0, 0, 255)
                 item_color = green if scan_successful else red
                 x,y,w,h = rectangle
-                cv.rectangle(marked_image,(x,y),(x+w,y+h),item_color,2) 
+                cv.rectangle(marked_image, (x,y), (x+w,y+h), item_color, 2) 
         
         return qr_items
     
@@ -119,6 +118,51 @@ class QRLocator:
         scanner.scan(image)
 
         return [symbol.data for symbol in image]
+
+class PlantLocator:
+    '''Locates plants within an image.'''
+    def __init__(self, plant_size):
+        '''Constructor.  Plant size is an estimate for searching.'''
+        self.plant_size = plant_size
+    
+    def locate(self, geo_image, image, marked_image):
+        '''Find plants in image and return list of Plant instances.''' 
+        # Grayscale original image so we can find edges in it. Default for OpenCV is BGR not RGB.
+        green_channel = cv.split(image)[1]
+ 
+        # Need to blur image before running edge detector to avoid a bunch of small edges due to noise.
+        blurred_image = cv.GaussianBlur(green_channel, (5,5), 0)
+        
+        # Canny will output a binary image where white = edges and black = background.
+        edge_image = cv.Canny(blurred_image, 100, 200)
+        
+        # Find contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
+        contours, hierarchy = cv.findContours(edge_image, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
+        
+        # Create rotated bounding rectangle for each contour.
+        #bounding_rectangles = [cv.minAreaRect(contour) for contour in contours]
+        bounding_rectangles = [cv.boundingRect(contour) for contour in contours]
+        
+        # Remove any rectangles that couldn't be a plant based off specified size
+        min_plant_size = self.plant_size * 0.2
+        max_plant_size = self.plant_size * 3
+        filtered_rectangles = filter_by_size(bounding_rectangles, geo_image.resolution, min_plant_size, max_plant_size)
+        
+        plants = []
+        for i, rectangle in enumerate(filtered_rectangles):
+            
+            # Just give default name for saving image until we later go through and assign to plant group.
+            plant = Plant(item_type = 'plant', name = 'plant{0}'.format(i), parent_image = geo_image.file_name, bounding_rect = rectangle)
+            plants.append(plant)
+                
+            if marked_image is not None:
+                # Show successful plants using colored bounding box.
+                purple = (255, 0, 255)
+                x,y,w,h = rectangle
+                cv.rectangle(marked_image, (x,y), (x+w,y+h), purple, 2) 
+        
+        return plants
 
 def filter_by_size(bounding_rects, resolution, min_size, max_size):
     '''Return list of rectangles that are within min/max size (specified in centimeters)'''

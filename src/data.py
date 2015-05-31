@@ -42,7 +42,7 @@ class Plant(FieldItem):
     def __init__(self, item_type, name, position=(0,0,0), size=(0,0), row=0, range_grid=0,
                   image_path='', parent_image='', bounding_rect=None, classification='auto', number=0):
         '''Constructor.'''
-        super(FieldItem, item_type, name, position, size, row, range_grid, image_path, parent_image, bounding_rect, classification)
+        super(Plant, self).__init__(item_type, name, position, size, row, range_grid, image_path, parent_image, bounding_rect, classification)
         self.number = number
         self.group = None
         
