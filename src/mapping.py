@@ -4,16 +4,18 @@ import sys
 import os
 import argparse
 
-# import the necessary things for OpenCV
+# OpenCV imports
 import cv2 as cv
 import numpy as np
 
+# Project imports
 from data import *
 from item_extraction import *
+from image_utils import *
 
-    
 if __name__ == '__main__':
-
+    '''Extract plants from images and assign to group using QR code'''
+    
     parser = argparse.ArgumentParser(description='Extract plants from images and assign to group using QR code.')
     parser.add_argument('image_directory', help='where to search for images to process')
     parser.add_argument('image_geo_file', help='file with position/heading data for each image.')
@@ -28,6 +30,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     
+    # convert command line arguments
     image_directory = args.image_directory
     image_geo_file = args.image_geo_file
     out_directory = args.output_directory
@@ -46,13 +49,7 @@ if __name__ == '__main__':
         
     current_row_num = start_row_num
     
-    image_filenames = []
-    for fname in os.listdir(image_directory):
-        extension = os.path.splitext(fname)[1][1:]
-        if extension.lower() in ['tiff', 'tif', 'jpg', 'jpeg', 'png']:
-            image_filenames.append(fname)
-        else:
-            print 'Skipping file {0} due to unsupported extension'.format(fname)
+    image_filenames = read_images(image_directory, ['tiff', 'tif', 'jpg', 'jpeg', 'png'])
                         
     if len(image_filenames) == 0:
         print "No images found in directory: {0}".format(image_directory)
@@ -60,46 +57,11 @@ if __name__ == '__main__':
     
     print "\nFound {0} images to process".format(len(image_filenames))
     
-    images = []
-    with open(image_geo_file, 'r') as geofile:
-        lines = geofile.readlines()
-        for line in lines:
-            if line.isspace():
-                continue
+    geo_images = parse_geo_file(image_geo_file, focal_length, camera_height, sensor_width)
             
-            fields = [field.strip() for field in line.split(',')]
-        
-            if len(fields) == 0:
-                continue
-
-            try:
-                image_name = fields[0]
-                image_time = fields[1]
-                x, y, z = fields[2 : 5]
-                heading = fields[5]
-                # Make sure filename doesn't have extension, we'll add it from image that we're processing.
-                image_name = os.path.splitext(image_name)[0]
-            except IndexError:
-                print 'Bad line: {0}'.format(line) 
-                continue
-
-            geo_image = GeoImage(image_name, (x, y, z), heading, focal_length, camera_height, sensor_width)
-            images.append(geo_image)
-            
-            
-    print "Parsed {0} geo images".format(len(images))
+    print "Parsed {0} geo images".format(len(geo_images))
     
-    missing_image_count = 0
-    for geo_image in images:
-        image_filenames_no_ext = [os.path.splitext(fname)[0] for fname in image_filenames]
-        try:
-            # Make sure actual image exists and use it's file extension.
-            index = image_filenames_no_ext.index(geo_image.file_name)
-            extension = os.path.splitext(image_filenames[index])[1][1:]
-            geo_image.file_name = "{0}.{1}".format(geo_image.file_name, extension)
-        except ValueError:
-            # Geo image doesn't have corresponding actual image
-            missing_image_count += 1
+    missing_image_count = verify_geo_images(geo_images, image_filenames)
            
     if missing_image_count > 0:
         print "Warning {0} geo images do not exist and will be skipped.".format(missing_image_count)
@@ -110,7 +72,7 @@ if __name__ == '__main__':
     qr_locator = QRLocator(qr_size)
     item_extractor = ItemExtractor([qr_locator])
     
-    for i, geo_image in enumerate(images):
+    for i, geo_image in enumerate(geo_images):
         
         if need_to_start_new_row:
             print "Starting row {0}".format(current_row_num)
@@ -121,7 +83,7 @@ if __name__ == '__main__':
             need_to_start_new_row = False
             in_row = False
         
-        print "Analyzing image [{0}/{1}]".format(i+1, len(images))
+        print "Analyzing image [{0}/{1}]".format(i+1, len(geo_images))
         
         full_filename = os.path.join(image_directory, geo_image.file_name)
         
@@ -152,7 +114,7 @@ if __name__ == '__main__':
         
         print 'Found {0} items.'.format(len(items))
         for item in items:
-            print item
+            print "Type: {0} Name: {1}".format(item.item_type, item.name)
 
         if marked_image is not None:
             filename, extension = os.path.splitext(geo_image.file_name)
@@ -160,8 +122,7 @@ if __name__ == '__main__':
             marked_image_path = os.path.join(row_directory, marked_image_filename)
             cv.imwrite(marked_image_path, marked_image)
 
-        continue
-        
+        '''        
         qr_names = [item.name for item in image_items if "code" in item.type.lower()] 
         
         if not in_row:
@@ -175,3 +136,4 @@ if __name__ == '__main__':
 
         if "end" in qr_names:
             need_to_start_new_row = True
+        '''

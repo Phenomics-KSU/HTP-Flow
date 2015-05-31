@@ -1,0 +1,62 @@
+#! /usr/bin/env python
+
+import sys
+import os
+
+# Project imporst
+from data import *
+
+def read_images(image_directory, extensions):
+    '''Return list of images with specified extensions.'''
+    image_filenames = []
+    for fname in os.listdir(image_directory):
+        extension = os.path.splitext(fname)[1][1:]
+        if extension.lower() in extensions:
+            image_filenames.append(fname)
+        else:
+            print 'Skipping file {0} due to unsupported extension'.format(fname)
+    return image_filenames
+    
+def parse_geo_file(image_geo_file, focal_length, camera_height, sensor_width):
+    '''Parse geo file and return list of GeoImage instances.'''
+    images = []
+    with open(image_geo_file, 'r') as geofile:
+        lines = geofile.readlines()
+        for line in lines:
+            if line.isspace():
+                continue
+            fields = [field.strip() for field in line.split(',')]
+            if len(fields) == 0:
+                continue
+            try:
+                image_name = fields[0]
+                image_time = fields[1]
+                x, y, z = fields[2 : 5]
+                heading = fields[5]
+                # Make sure filename doesn't have extension, we'll add it from image that we're processing.
+                image_name = os.path.splitext(image_name)[0]
+            except IndexError:
+                print 'Bad line: {0}'.format(line) 
+                continue
+
+            geo_image = GeoImage(image_name, (x, y, z), heading, focal_length, camera_height, sensor_width)
+            images.append(geo_image)
+            
+    return images
+
+def verify_geo_images(geo_images, image_filenames):
+    '''Verify each geo image exists in specified image file names. Return # missing images.'''
+    missing_image_count = 0
+    for geo_image in geo_images:
+        image_filenames_no_ext = [os.path.splitext(fname)[0] for fname in image_filenames]
+        try:
+            # Make sure actual image exists and use it's file extension.
+            index = image_filenames_no_ext.index(geo_image.file_name)
+            extension = os.path.splitext(image_filenames[index])[1][1:]
+            geo_image.file_name = "{0}.{1}".format(geo_image.file_name, extension)
+        except ValueError:
+            # Geo image doesn't have corresponding actual image
+            missing_image_count += 1
+            
+    return missing_image_count
+            

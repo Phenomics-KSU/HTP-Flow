@@ -1,36 +1,37 @@
 #! /usr/bin/env python
 
-import sys
 import os
-import argparse
 
-# import the necessary things for OpenCV
+# OpenCV imports
 import cv2 as cv
 import numpy as np
-import zbar
-import Image
 
+# Zbar imports
+import zbar
+import Image # Python Imaging Library
+
+# Project imports
 from data import *
 
 class ItemExtractor:
-    
+    '''Extracts field items from image.'''    
     def __init__(self, locators):
+        '''Constructor'''
         self.locators = locators
     
     def extract_items(self, geo_image, image, marked_image, out_directory):
-    
+        '''Find items with locators and extract items into separate images. Return list of FieldItems.'''
         if marked_image is not None:
             # Show what 1" is on the top-left of the image.
             pixels = int(2.54 / geo_image.resolution)
             cv.rectangle(marked_image, (1,1), (pixels, pixels), (255,255,255), 2) 
     
         field_items = []
-    
         for locator in self.locators:
             located_items = locator.locate(geo_image, image, marked_image)
             field_items.extend(located_items)
 
-        # Extract field items into own image
+        # Extract field items into separate image
         for item in field_items:
             
             extracted_image = extract_image(item.bounding_rect, 20, image)
@@ -42,18 +43,18 @@ class ItemExtractor:
             
             item.image_path = extracted_image_path
 
-        #sorts them in order
+        #TODO sort field items
         
         return field_items
         
-
 class QRLocator:
-    
+    '''Locates and decodes QR codes.'''
     def __init__(self, qr_size):
+        '''Constructor.  QR size is an estimate for searching.'''
         self.qr_size = qr_size
     
     def locate(self, geo_image, image, marked_image):
-
+        '''Find QR codes in image and decode them.  Return list of FieldItems representing valid QR codes.''' 
         # Grayscale original image so we can find edges in it. Default for OpenCV is BGR not RGB.
         gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     
@@ -78,7 +79,6 @@ class QRLocator:
         
         # Scan each rectangle with QR reader to remove false positives and also extract data from code.
         qr_items = []
-
         for rectangle in filtered_rectangles:
             extracted_image = extract_image(rectangle, 30, image)
             qr_data = self.scan_image(extracted_image)            
@@ -101,7 +101,6 @@ class QRLocator:
     
     def scan_image(self, cv_image):
         '''Scan image with Zbar and return data found in visual code(s)'''
-        
         # Create and configure reader.
         scanner = zbar.ImageScanner()
         scanner.parse_config('enable')
@@ -118,12 +117,11 @@ class QRLocator:
         
         # Scan image and return results.
         scanner.scan(image)
-        for symbol in image:
-            print symbol.data
+
         return [symbol.data for symbol in image]
 
 def filter_by_size(bounding_rects, resolution, min_size, max_size):
-    
+    '''Return list of rectangles that are within min/max size (specified in centimeters)'''
     filtered_rects = []
     
     for rectangle in bounding_rects:    
@@ -139,7 +137,7 @@ def filter_by_size(bounding_rects, resolution, min_size, max_size):
     return filtered_rects
 
 def extract_image(rectangle, pad, image):
-    
+    '''Return image that corresponds to bounding rectangle with pad added in.'''
     # reference properties of bounding rectangle
     #x, y = rectangle[0]
     #w, h = rectangle[1]
@@ -155,5 +153,3 @@ def extract_image(rectangle, pad, image):
     right = int(min(image_w - 1, x + w + pad))
 
     return image[top:bottom, left:right]
-
-
