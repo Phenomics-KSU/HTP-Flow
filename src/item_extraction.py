@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 
 import os
+from operator import itemgetter, attrgetter, methodcaller
 
 # OpenCV imports
 import cv2 as cv
@@ -216,3 +217,17 @@ def extract_image(rectangle, pad, image):
     right = int(min(image_w - 1, x + w + pad))
 
     return image[top:bottom, left:right]
+
+def order_items(items, direction):
+    '''Return new list but sorted according to direction (ie tb for top to bottom)'''
+    if direction == 'tb':
+        return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[1])
+    elif direction == 'bt':
+        return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[1], reverse=True)
+    elif direction == 'lr':
+        return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[0])
+    elif direction == 'rl':
+        return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[0], reverse=True)
+    else:
+        return None
+    

@@ -28,6 +28,8 @@ if __name__ == '__main__':
     parser.add_argument('-sw', dest='sensor_width', default=0, help='Sensor width in same units as focal length. Must be > 0')
     parser.add_argument('-fl', dest='focal_length', default=0, help='effective focal length in same units as sensor width. Must be > 0')
     parser.add_argument('-mk', dest='marked_image', default=False, help='If true then will output marked up image.  Default false.')
+    parser.add_argument('-dir', dest='order_direction', default='bt', help='How to order extracted items (top, bottom, left, right).  Example tb means top to bottom. Default bt')
+    parser.add_argument('-md', dest='max_distance', default=12, help='Maximum radius in centimeters to consider two items the same between multiple images.')
 
     args = parser.parse_args()
     
@@ -43,10 +45,17 @@ if __name__ == '__main__':
     sensor_width = float(args.sensor_width)
     focal_length = float(args.focal_length)
     use_marked_image = args.marked_image
+    order_direction = args.order_direction
+    max_distance = float(args.max_distance)
     
     if qr_size <= 0 or plant_size <= 0 or camera_height <= 0 or sensor_width <= 0 or focal_length <= 0:
         print "\nError: One or more arguments were not greater than zero.\n"
         parser.print_help()
+        sys.exit(1)
+        
+    possible_order_directions = ['tb', 'bt', 'rl', 'lr']
+    if order_direction not in possible_order_directions:
+        print "Error: Search direction {0} invalid.  Possible choices are {1}".format(order_direction, possible_order_directions)
         sys.exit(1)
         
     current_row_num = start_row_num
@@ -76,9 +85,11 @@ if __name__ == '__main__':
     item_extractor = ItemExtractor([qr_locator, plant_locator])
     
     ImageWriter.level = ImageWriter.DEBUG
+
+    items = [] # All field items found in images.
     
     for i, geo_image in enumerate(geo_images):
-        
+        '''
         if need_to_start_new_row:
             print "Starting row {0}".format(current_row_num)
             row_directory = "row{0}".format(current_row_num)
@@ -87,7 +98,7 @@ if __name__ == '__main__':
                 os.makedirs(row_directory)
             need_to_start_new_row = False
             in_row = False
-        
+        '''
         print "Analyzing image [{0}/{1}]".format(i+1, len(geo_images))
         
         full_filename = os.path.join(image_directory, geo_image.file_name)
@@ -106,7 +117,7 @@ if __name__ == '__main__':
             continue
         
         # Specify 'image directory' so that if any images associated with current image are saved a directory is created.
-        image_out_directory = os.path.join(row_directory, os.path.splitext(geo_image.file_name)[0])
+        image_out_directory = os.path.join(out_directory, os.path.splitext(geo_image.file_name)[0])
         ImageWriter.output_directory = image_out_directory
 
         marked_image = None
@@ -114,29 +125,30 @@ if __name__ == '__main__':
             # Copy original image so we can mark on it for debugging.
             marked_image = image.copy()
 
-        items = item_extractor.extract_items(geo_image, image, marked_image, image_out_directory)
+        image_items = item_extractor.extract_items(geo_image, image, marked_image, image_out_directory)
         
-        print 'Found {0} items.'.format(len(items))
-        for item in items:
+        image_items = order_items(image_items, order_direction)
+        
+        print 'Found {0} items.'.format(len(image_items))
+        for item in image_items:
             print "Type: {0} Name: {1}".format(item.item_type, item.name)
+
+        items.extend(image_items)
 
         if marked_image is not None:
             marked_image_filename = postfix_filename(geo_image.file_name, '_marked')
-            marked_image_path = os.path.join(row_directory, marked_image_filename)
+            marked_image_path = os.path.join(out_directory, marked_image_filename)
             cv.imwrite(marked_image_path, marked_image)
 
-        '''        
-        qr_names = [item.name for item in image_items if "code" in item.type.lower()] 
-        
-        if not in_row:
-            if "start" in qr_names:
-                # TODO update 'start' name to include row number
-                in_row = True
-                print 'Found start code'
-            elif len(qr_names) > 0:
-                # TODO make sure not seeing 'end' twice
-                print "Warning! QR code found before start code."
+    # Eliminate any duplicated items coming from multiple pictures.
+    unique_items = []
+    for item in items:
+        matching_item = None
+        for comparision_item in unique_items:
+            if is_same_item(item, comparision_item, max_distance):
+                matching_item = comparision_item
+                break
+        if matching_item is None:
+            unique_items.append(item)
 
-        if "end" in qr_names:
-            need_to_start_new_row = True
-        '''
+    print len(unique_items)

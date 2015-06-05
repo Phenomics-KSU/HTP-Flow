@@ -98,4 +98,8 @@ def verify_geo_images(geo_images, image_filenames):
             missing_image_count += 1
             
     return missing_image_count
-            
+
+def rectangle_center(rectangle):
+    '''Returns (x,y) tuple of center of rectangle.'''
+    x, y, w, h = rectangle
+    return (x + w/2, y + h/2)
