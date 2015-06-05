@@ -28,7 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('-sw', dest='sensor_width', default=0, help='Sensor width in same units as focal length. Must be > 0')
     parser.add_argument('-fl', dest='focal_length', default=0, help='effective focal length in same units as sensor width. Must be > 0')
     parser.add_argument('-mk', dest='marked_image', default=False, help='If true then will output marked up image.  Default false.')
-    parser.add_argument('-dir', dest='order_direction', default='bt', help='How to order extracted items (top, bottom, left, right).  Example tb means top to bottom. Default bt')
+    parser.add_argument('-cr', dest='camera_rotation', default=0, help='Camera rotation (0, 90, 180, 270).  0 is camera top forward and increases counter-clockwise.' )
     parser.add_argument('-md', dest='max_distance', default=12, help='Maximum radius in centimeters to consider two items the same between multiple images.')
 
     args = parser.parse_args()
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     sensor_width = float(args.sensor_width)
     focal_length = float(args.focal_length)
     use_marked_image = args.marked_image
-    order_direction = args.order_direction
+    camera_rotation = int(args.camera_rotation)
     max_distance = float(args.max_distance)
     
     if qr_size <= 0 or plant_size <= 0 or camera_height <= 0 or sensor_width <= 0 or focal_length <= 0:
@@ -53,9 +53,9 @@ if __name__ == '__main__':
         parser.print_help()
         sys.exit(1)
         
-    possible_order_directions = ['tb', 'bt', 'rl', 'lr']
-    if order_direction not in possible_order_directions:
-        print "Error: Search direction {0} invalid.  Possible choices are {1}".format(order_direction, possible_order_directions)
+    possible_camera_rotations = [0, 90, 180, 270]
+    if camera_rotation not in possible_camera_rotations:
+        print "Error: Camera rotation {0} invalid.  Possible choices are {1}".format(camera_rotation, possible_camera_rotations)
         sys.exit(1)
         
     current_row_num = start_row_num
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     
     print "\nFound {0} images to process".format(len(image_filenames))
     
-    geo_images = parse_geo_file(image_geo_file, focal_length, camera_height, sensor_width)
+    geo_images = parse_geo_file(image_geo_file, focal_length, camera_rotation, camera_height, sensor_width)
             
     print "Parsed {0} geo images".format(len(geo_images))
     
@@ -110,7 +110,8 @@ if __name__ == '__main__':
             continue
 
         # Update remaining geo image properties before doing image analysis.  This makes it so we only open image once.
-        geo_image.image_width_in_pixels = image.shape[1]
+        image_height, image_width, _ = image.shape
+        geo_image.size = (image_width, image_height)
   
         if geo_image.resolution <= 0:
             print "Cannot calculate image resolution. Skipping image."
@@ -127,7 +128,7 @@ if __name__ == '__main__':
 
         image_items = item_extractor.extract_items(geo_image, image, marked_image, image_out_directory)
         
-        image_items = order_items(image_items, order_direction)
+        image_items = order_items(image_items, camera_rotation)
         
         print 'Found {0} items.'.format(len(image_items))
         for item in image_items:
@@ -152,3 +153,6 @@ if __name__ == '__main__':
             unique_items.append(item)
 
     print len(unique_items)
+    for item in items:
+        print item.name
+        print item.position

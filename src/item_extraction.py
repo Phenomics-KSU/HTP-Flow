@@ -2,6 +2,7 @@
 
 import os
 from operator import itemgetter, attrgetter, methodcaller
+import math
 
 # OpenCV imports
 import cv2 as cv
@@ -43,7 +44,7 @@ class ItemExtractor:
             
             item.image_path = extracted_image_path
             
-        #TODO sort field items
+            item.position = calculate_position(item, geo_image)
         
         return field_items
         
@@ -218,16 +219,39 @@ def extract_image(rectangle, pad, image):
 
     return image[top:bottom, left:right]
 
-def order_items(items, direction):
-    '''Return new list but sorted according to direction (ie tb for top to bottom)'''
-    if direction == 'tb':
+def order_items(items, camera_rotation):
+    '''Return new list but sorted from backward to forward taking into account camera rotation.'''
+    if camera_rotation == 180:  # top to bottom
         return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[1])
-    elif direction == 'bt':
+    elif camera_rotation == 0: # bottom to top
         return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[1], reverse=True)
-    elif direction == 'lr':
+    elif camera_rotation == 90: # left to right
         return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[0])
-    elif direction == 'rl':
+    elif camera_rotation == 270: # right to left
         return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[0], reverse=True)
     else:
         return None
+    
+def calculate_position(item, geo_image):
+    '''Return (x,y,z) position of item within geo image.'''
+    resolution = geo_image.resolution
+    x, y = rectangle_center(item.bounding_rect)
+    # Reference x y from center of image instead of top left corner.
+    x = x - geo_image.size[0]/2
+    y = -y + geo_image.size[1]/2
+    # Rotate x y from image frame to easting-northing frame.
+    # A camera rotation of 0 corresponds to top of image being forward so need to subtract 90 to get positive x being top of image.
+    heading = math.radians(geo_image.heading_degrees + geo_image.camera_rotation_degrees - 90)
+    east_offset = math.cos(heading) * x - math.sin(heading) * y
+    north_offset = math.sin(heading) * x + math.cos(heading) * y
+    # Convert offsets from pixels to meters.
+    east_offset *= resolution / 100
+    north_offset *= resolution / 100
+    # Take into account camera height.  Negative since item is below camera.
+    z_meters = -geo_image.camera_height / 100
+    
+    return (geo_image.position[0] + east_offset, geo_image.position[1] + north_offset, geo_image.position[2] + z_meters)
+
+    
+     
     

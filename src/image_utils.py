@@ -56,7 +56,7 @@ def read_images(image_directory, extensions):
             print 'Skipping file {0} due to unsupported extension'.format(fname)
     return image_filenames
     
-def parse_geo_file(image_geo_file, focal_length, camera_height, sensor_width):
+def parse_geo_file(image_geo_file, focal_length, camera_rotation, camera_height, sensor_width):
     '''Parse geo file and return list of GeoImage instances.'''
     images = []
     with open(image_geo_file, 'r') as geofile:
@@ -69,16 +69,18 @@ def parse_geo_file(image_geo_file, focal_length, camera_height, sensor_width):
                 continue
             try:
                 image_name = fields[0]
-                image_time = fields[1]
-                x, y, z = fields[2 : 5]
-                heading = fields[5]
+                image_time = float(fields[1])
+                x = float(fields[2])
+                y = float(fields[3])
+                z = float(fields[4])
+                heading = float(fields[5])
                 # Make sure filename doesn't have extension, we'll add it from image that we're processing.
                 image_name = os.path.splitext(image_name)[0]
-            except IndexError:
+            except (IndexError, ValueError):
                 print 'Bad line: {0}'.format(line) 
                 continue
 
-            geo_image = GeoImage(image_name, (x, y, z), heading, focal_length, camera_height, sensor_width)
+            geo_image = GeoImage(image_name, image_time, (x, y, z), heading, focal_length, camera_rotation, camera_height, sensor_width)
             images.append(geo_image)
             
     return images
