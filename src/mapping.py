@@ -72,6 +72,9 @@ if __name__ == '__main__':
             
     print "Parsed {0} geo images".format(len(geo_images))
     
+    print "Sorting images by timestamp."
+    geo_images = sorted(geo_images, key=lambda image: image.image_time)
+    
     missing_image_count = verify_geo_images(geo_images, image_filenames)
            
     if missing_image_count > 0:
