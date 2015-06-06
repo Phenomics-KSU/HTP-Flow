@@ -40,6 +40,7 @@ class FieldItem(object):
         self.parent_image = parent_image
         self.bounding_rect = bounding_rect
         self.classification = classification
+        self.other_items = [] # same field item from different images
         
 class Plant(FieldItem):
     '''Plant found within image'''

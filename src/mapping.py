@@ -143,8 +143,9 @@ if __name__ == '__main__':
             marked_image_filename = postfix_filename(geo_image.file_name, '_marked')
             marked_image_path = os.path.join(out_directory, marked_image_filename)
             cv.imwrite(marked_image_path, marked_image)
-
-    # Eliminate any duplicated items coming from multiple pictures.
+            
+    # Merge duplicated items coming from multiple pictures so that first references the others.
+    print "Merging items."
     unique_items = []
     for item in items:
         matching_item = None
@@ -154,8 +155,15 @@ if __name__ == '__main__':
                 break
         if matching_item is None:
             unique_items.append(item)
+        else:
+            # We've already stored this same item so just have the one we stored reference this one.
+            matching_item.other_items.append(item)
+            
+    items = unique_items
 
-    print len(unique_items)
+    print len(items)
     for item in items:
         print item.name
         print item.position
+        for other_item in item.other_items:
+            print "\t{0}".format(other_item.position) 
