@@ -24,7 +24,25 @@ class GeoImage(object):
             return 0 #  Avoid division by zero or negative results
         hfov = self.camera_height * (self.sensor_width / self.focal_length)
         return hfov / self.size[0]  # cm per pixel
-        
+
+class Row(object):
+    '''Collection of items in field row.'''
+    def __init__(self, start_code=None, end_code=None, items=None):
+        self.start_code = start_code
+        self.end_code = end_code
+        self.items = items
+        if self.items is None:
+            self.items = []
+    
+    @property
+    def number(self):
+        '''Return row number of -1 if not set.'''
+        try:
+            row_number = int(self.start_code.name)
+        except (ValueError, TypeError):
+            row_number = -1
+        return row_number
+            
 class FieldItem(object):
     '''Item found within image'''
     def __init__(self, item_type, name, position=(0,0,0), size=(0,0), row=0, range_grid=0,
@@ -53,12 +71,18 @@ class Plant(FieldItem):
         
 class PlantGroup(object):
     '''Plant grouping. Entry number and repetition. '''
-    def __init__(self, entry, rep, start_qr=None, plants=[]):
+    def __init__(self, start_code=None, plants=None):
         '''Constructor.'''
-        self.entry = entry
-        self.rep = rep
-        self.start_qr = start_qr
+        self.start_code = start_code
         self.plants = plants
+        if self.plants is None:
+            self.plants = []
+    @property
+    def entry(self):
+        return self.start_code.name[:-1]
+    @property
+    def rep(self):
+        return self.start_code.name[-1]
         
 def is_same_item(item1, item2, max_position_difference):
     '''returns true if both items are similar enough to be considered the same.'''

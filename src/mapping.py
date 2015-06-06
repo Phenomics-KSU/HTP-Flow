@@ -161,9 +161,67 @@ if __name__ == '__main__':
             
     items = unique_items
 
+    # Sort items into row groupings
+    rows = []
+    current_row = None
+    outside_row_plants = [] # plants found not in a row.
+    for item in items:
+        if item.item_type == 'code-row':
+            row_number = int(item.name)
+            if current_row is None:
+                # Start a new row.
+                current_row = Row(start_code=item)
+            elif row_number == current_row.number:
+                # Ending current row.
+                current_row.end_code = item
+                current_row = None
+                rows.append(current_row)
+                continue
+            else:
+                # Unexpectedly hit next row.  Likely missed row end QR code.
+                print "HIT NEXT ROW!!!" # TODO ask user for correction
+        else: # item isn't a row end code.
+            if current_row is not None:
+                current_row.items.append(item)
+            else: # Not in a row.
+                if item.item_type == 'code-group':
+                    # Hit a QR code outside of row.  This means we likely missed the row start code.
+                    print "HIT QR GROUP CODE OUTSIDE OF ROW!!!" # TODO have user fix
+                else:
+                    # This means item is a false positive plant since it occurred outside of row.
+                    outside_row_plants.append(item)
+
+    if len(outside_row_plants) > 0:
+        print "Detected {0} plants outside of rows.".format(len(outside_row_plants))
+
+    if current_row is not None:
+        print "Ended in middle of row {0}.  It will not be processed. Row start image {1}".format(current_row.number, current_row.start_code.file_name)
+
+    groups = []
+    for row in rows:
+        print "Finding plant groupings in row {0}".format(row.number)
+        
+        current_group = None
+        for item in row.items:
+            if item.item_type == 'code-group':
+                if current_group is not None:
+                    # End current group.
+                    groups.append(current_group)
+                    current_group = None
+                    
+                # Start a new group.
+                current_group = PlantGroup(start_code=item)
+
+            else: # item is a plant since it's not a code.
+                if current_group is None:
+                    # TODO: Need to look up and add to previous group from 2 rows ago.
+                    print "TODO: Hit plant in row before group"
+                else:
+                    current_group.plants.append(item)
+
     print len(items)
     for item in items:
         print item.name
         print item.position
         for other_item in item.other_items:
-            print "\t{0}".format(other_item.position) 
+            print "\t{0}".format(other_item.position)
