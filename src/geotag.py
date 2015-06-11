@@ -6,7 +6,7 @@ import argparse
 import math
 
 class GeoReading:
-    
+    '''Sensor reading with position/orientation information.'''
     def __init__(self, time, data, position, orientation):
         self.time = time
         self.data = data
@@ -14,7 +14,7 @@ class GeoReading:
         self.orientation = orientation
 
 def match_id_to_filename(filesnames, keyword_id):
-    '''Return filename that contains id somewhere in name or extension. Returns None if not exactly one found.'''
+    '''Return filename that contains id somewhere in name or extension. Returns None if not exactly one filename found.'''
     matched_filenames = []
     for filename in filenames:
         if keyword_id in filename:
@@ -30,7 +30,11 @@ def match_id_to_filename(filesnames, keyword_id):
     return matched_filenames[0]
 
 def geotag(reading, offsets, positions, orientations):
-    
+    '''Find position/orientation of reading (time, data) using specified sensor offsets in body frame.
+        x = positive forward
+        y = positive left
+        z = positive upwards
+    '''
     reading_time = reading[0]
     reading_data = reading[1:]
     
@@ -59,12 +63,16 @@ def geotag(reading, offsets, positions, orientations):
     return GeoReading(reading_time, reading_data, (x, y, z), (angle1, angle2, angle3))
 
 def interpolate(x_value, x_set, y_set):
+    '''Return y value corresponding to x value.  If outside bounds of x_set then returns closest value.
+       x_set and y_set must have the same amounts of elements.  Returns None on failure.'''
+    if len(x_set) != len(y_set):
+        return None
     
-    i1 = None
-    i2 = None
+    i1 = None  # index of element in x_set right before x_value
+    i2 = None  # index of element in x_set right after x_value
     for i, x in enumerate(x_set):
         if x == x_value:
-            return y_set[i]
+            return y_set[i] # don't need to interpolate since match exactly.
         if x > x_value:
             i2 = i
             break
@@ -84,11 +92,12 @@ def interpolate(x_value, x_set, y_set):
     return y_set[i1] + slope * (x_value - x_set[i1])
 
 if __name__ == '__main__':
-    '''Create geotag file for each sensor '''
-    
+    '''Create geotag file for each sensor reading file.'''
+    # Any reference to keyword ID is a short (unique) part of a filename.  
+    # For example in the filename irt235 a keyword ID could be irt if no other irt files exist in the same directory. 
     default_position_id = 'position'
     default_orientation_id = 'orientation'
-    parser = argparse.ArgumentParser(description='Create geotag file for each sensor.')
+    parser = argparse.ArgumentParser(description='Create geotag file for each sensor file.')
     parser.add_argument('input_directory', help='Where to search for files to process')
     parser.add_argument('-p', dest='position', default=default_position_id, help='File name identifier for input position file. Default {0}'.format(default_position_id))
     parser.add_argument('-o', dest='orientation', default=default_orientation_id, help='File name identifier for input orientation file. Default {0}'.format(default_orientation_id))
@@ -123,11 +132,11 @@ if __name__ == '__main__':
         with open(sensors) as sensors_file:
             sensors = sensors_file.read()
     
-    # Split sensors up into list of lists (sensor id, x offset, y offset, z offset)
+    # Split sensors up into list of lists (sensor keyword id, x offset, y offset, z offset)
     sensors = sensors.replace('\n',',').replace('\t',',').split(',')
     sensors = [sensor.split() for sensor in sensors]
     
-    # Convert sensor keyword IDs to filenames.
+    # Convert sensor keyword IDs to filenames so now we have (sensor filename, x offset, y offset, z offset).
     for sensor in sensors:
         if len(sensor) != 4:
             print 'Bad sensor info. Need exactly 4 elements: {0}'.format(sensor)
@@ -156,7 +165,7 @@ if __name__ == '__main__':
         orientations = [[float(i) for i in orientation] for orientation in orientations]
     print 'Read {0} orientations'.format(len(orientations))
     
-    # Read in sensors.
+    # Read in sensor data and create corresponding geo-referenced file.
     for sensor in sensors:
         sensor_filename = sensor[0]
         offsets = [float(offset) for offset in sensor[1:4]] # offsets from position reading
