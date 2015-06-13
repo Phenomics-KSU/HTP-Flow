@@ -81,7 +81,7 @@ class QRLocator:
         qr_items = []
         for rectangle in filtered_rectangles:
             extracted_image = extract_image(rectangle, 30, image)
-            qr_data = self.scan_image(extracted_image)            
+            qr_data = self.scan_image_multiple(extracted_image)
             scan_successful = len(qr_data) != 0
 
             if scan_successful:
@@ -98,6 +98,37 @@ class QRLocator:
                 cv.rectangle(marked_image, (x,y), (x+w,y+h), item_color, 2) 
         
         return qr_items
+    
+    def scan_image_multiple(self, cv_image):
+        '''Scan image using multiple thresholds if first try fails. Return list of data found in image.'''
+        scan_try = 0
+        qr_data = []
+        while True:
+            if scan_try == 0:
+                image_to_scan = cv_image # use original image
+            elif scan_try == 1:
+                cv_gray_image = cv.cvtColor(cv_image, cv.COLOR_BGR2GRAY)
+                cv_thresh_image = cv.adaptiveThreshold(cv_gray_image, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 101, 2)
+                image_to_scan = cv.cvtColor(cv_thresh_image, cv.COLOR_GRAY2BGR)
+            elif scan_try == 2:
+                cv_gray_image = cv.cvtColor(cv_image, cv.COLOR_BGR2GRAY)
+                _, cv_thresh_image = cv.threshold(cv_gray_image, 165, 255, 0)
+                image_to_scan = cv.cvtColor(cv_thresh_image, cv.COLOR_GRAY2BGR)
+            else:
+                break # nothing else to try.
+            
+            qr_data = self.scan_image(image_to_scan)
+            
+            if len(qr_data) > 0:
+                break # found code data in image so don't need to keep trying
+            
+            scan_try += 1
+            
+        # Notify if had to use a backup thresholding and had success.
+        if scan_try > 0 and len(qr_data) > 0:
+            print 'success on scan try {0}'.format(scan_try)
+            
+        return qr_data
     
     def scan_image(self, cv_image):
         '''Scan image with Zbar and return data found in visual code(s)'''
