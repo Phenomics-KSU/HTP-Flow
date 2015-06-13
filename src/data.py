@@ -99,6 +99,9 @@ def is_same_item(item1, item2, max_position_difference):
     delta_y = item1.position[1] - item2.position[1]
     position_difference = sqrt(delta_x*delta_x + delta_y*delta_y)
     
+    # convert max difference from cm to meters
+    max_position_difference /= 100.0
+    
     if position_difference > max_position_difference:
         return False # Too far apart
     
