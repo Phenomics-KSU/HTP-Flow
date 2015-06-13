@@ -56,15 +56,13 @@ class QRLocator:
     
     def locate(self, geo_image, image, marked_image):
         '''Find QR codes in image and decode them.  Return list of FieldItems representing valid QR codes.''' 
-        # Grayscale original image so we can find edges in it. Default for OpenCV is BGR not RGB.
+        # Threshold grayscaled image to make white QR codes stands out.
         gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-    
-        # Need to blur image before running edge detector to avoid a bunch of small edges due to noise.
         _, thresh_image = cv.threshold(gray_image, 150, 255, 0)
         
         # Find outer contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
         contours, hierarchy = cv.findContours(thresh_image.copy(), cv.cv.CV_RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
+        #contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
         
         # Create bounding box for each contour.
         bounding_rectangles = [cv.boundingRect(contour) for contour in contours]
@@ -124,9 +122,10 @@ class QRLocator:
 
 class PlantLocator:
     '''Locates plants within an image.'''
-    def __init__(self, plant_size):
+    def __init__(self, min_plant_size, max_plant_size):
         '''Constructor.  Plant size is an estimate for searching.'''
-        self.plant_size = plant_size
+        self.min_plant_size = min_plant_size
+        self.max_plant_size = max_plant_size
     
     def locate(self, geo_image, image, marked_image):
         '''Find plants in image and return list of Plant instances.''' 
@@ -136,42 +135,58 @@ class PlantLocator:
         # Convert Blue-Green-Red color space to HSV
         hsv_image = cv.cvtColor(image, cv.COLOR_BGR2HSV)
             
-        # Define range of green colors in HSV that corresponds with plants.
+        # Threshold the HSV image to get only green colors that correspond to plants.
         green_hue = 60
-        lower_green = np.array([green_hue - 30, 50, 50], np.uint8)
+        lower_green = np.array([green_hue - 30, 90, 50], np.uint8)
         upper_green = np.array([green_hue + 30, 255, 255], np.uint8)
+        plant_mask = cv.inRange(hsv_image, lower_green, upper_green)
     
-        # Threshold the HSV image to get only green colors
-        green_mask = cv.inRange(hsv_image, lower_green, upper_green)
+        # Now do the same thing for yellowish dead plants.
+        lower_yellow = np.array([10, 50, 125], np.uint8)
+        upper_yellow = np.array([40, 255, 255], np.uint8)
+        dead_plant_mask = cv.inRange(hsv_image, lower_yellow, upper_yellow)
         
-        # Find outer contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
-        contours, hierarchy = cv.findContours(green_mask.copy(), cv.cv.CV_RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
+        filtered_rectangles = []
+        for i, mask in enumerate([plant_mask, dead_plant_mask]):
+            # Open mask (to remove noise) and then dilate it to connect contours.
+            kernel = np.ones((5,5), np.uint8)
+            mask_open = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel)
+            mask = cv.dilate(mask_open, kernel, iterations = 1)
+            
+            # Find outer contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
+            contours, hierarchy = cv.findContours(mask.copy(), cv.cv.CV_RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+            #contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
+            
+            # Create bounding box for each contour.
+            bounding_rectangles = [cv.boundingRect(contour) for contour in contours]
+            
+            if marked_image is not None:
+                for rectangle in bounding_rectangles:
+                    # Show rectangles using colored bounding box.
+                    x,y,w,h = rectangle
+                    cv.rectangle(marked_image, (x,y), (x+w,y+h), (0,0,0), 2) 
+            
+            # Remove any rectangles that couldn't be a plant based off specified size.
+            filtered_rectangles.extend(filter_by_size(bounding_rectangles, geo_image.resolution, self.min_plant_size, self.max_plant_size, enforce_min_on_w_and_h=False))
+            
+            if ImageWriter.level <= ImageWriter.DEBUG:
+                # Debug save intermediate images
+                mask_filename = postfix_filename(geo_image.file_name, 'mask_{0}'.format(i))
+                ImageWriter.save_debug(mask_filename, mask)
         
-        # Create bounding box for each contour.
-        bounding_rectangles = [cv.boundingRect(contour) for contour in contours]
+        if marked_image is not None:
+            for rectangle in filtered_rectangles:
+                # Show rectangles using colored bounding box.
+                purple = (255, 0, 255)
+                x,y,w,h = rectangle
+                cv.rectangle(marked_image, (x,y), (x+w,y+h), purple, 2) 
         
-        # Remove any rectangles that couldn't be a plant based off specified size
-        min_plant_size = self.plant_size * 0.2
-        max_plant_size = self.plant_size * 3
-        filtered_rectangles = filter_by_size(bounding_rectangles, geo_image.resolution, min_plant_size, max_plant_size)
-        
-        if ImageWriter.level <= ImageWriter.DEBUG:
-            # Debug save intermediate images
-            '''
-            hue, saturation, value = cv.split(hsv_image)
-            hue_filename = postfix_filename(geo_image.file_name, 'hue_channel')
-            ImageWriter.save_debug(hue_filename, hue)
-            saturation_filename = postfix_filename(geo_image.file_name, 'saturation_channel')
-            ImageWriter.save_debug(saturation_filename, saturation)
-            value_filename = postfix_filename(geo_image.file_name, 'value_channel')
-            ImageWriter.save_debug(value_filename, value)
-            '''
-            edge_filename = postfix_filename(geo_image.file_name, 'edges')
-            ImageWriter.save_debug(edge_filename, green_mask)
-        
+        # Now go through and cluster plants (leaves) that are close together.
+        max_distance = 20 # centimeters
+        rectangle_clusters = cluster_rectangles(filtered_rectangles, max_distance / geo_image.resolution)
+            
         plants = []
-        for i, rectangle in enumerate(filtered_rectangles):
+        for i, rectangle in enumerate(rectangle_clusters):
             
             # Just give default name for saving image until we later go through and assign to plant group.
             plant = Plant(item_type = 'plant', name = 'plant{0}'.format(i), parent_image = geo_image.file_name, bounding_rect = rectangle)
@@ -179,13 +194,13 @@ class PlantLocator:
                 
             if marked_image is not None:
                 # Show successful plants using colored bounding box.
-                purple = (255, 0, 255)
+                blue = (255, 0, 0)
                 x,y,w,h = rectangle
-                cv.rectangle(marked_image, (x,y), (x+w,y+h), purple, 2) 
+                cv.rectangle(marked_image, (x,y), (x+w,y+h), blue, 2) 
         
         return plants
 
-def filter_by_size(bounding_rects, resolution, min_size, max_size):
+def filter_by_size(bounding_rects, resolution, min_size, max_size, enforce_min_on_w_and_h=True):
     '''Return list of rectangles that are within min/max size (specified in centimeters)'''
     filtered_rects = []
     
@@ -196,7 +211,14 @@ def filter_by_size(bounding_rects, resolution, min_size, max_size):
         w = w_pixels * resolution
         h = h_pixels * resolution
         
-        if h >= min_size and w >= min_size and h <= max_size and w <= max_size:
+        if enforce_min_on_w_and_h:
+            # Need both side lengths to pass check.
+            min_check_passed = h >= min_size and w >= min_size
+        else:
+            # Just need one side length to be long enough.
+            min_check_passed = h >= min_size or w >= min_size
+            
+        if min_check_passed and h <= max_size and w <= max_size:
             filtered_rects.append(rectangle)
             
     return filtered_rects

@@ -23,13 +23,15 @@ if __name__ == '__main__':
     parser.add_argument('starting_row_number', help='Row number for starting images')
     parser.add_argument('row_skip_number', help='How many rows to skip when moving to next row')
     parser.add_argument('-qr', dest='qr_size', default=0, help='side length of QR item in centimeters. Must be > 0')
-    parser.add_argument('-ps', dest='plant_size', default=0, help='Estimated plant size in centimeters. Must be > 0')
+    parser.add_argument('-minps', dest='min_plant_size', default=0, help='Minimum plant size in centimeters. Must be > 0')
+    parser.add_argument('-maxps', dest='max_plant_size', default=0, help='Maximum plant size in centimeters. Must be > 0')
     parser.add_argument('-ch', dest='camera_height', default=0, help='camera height in centimeters. Must be > 0')
     parser.add_argument('-sw', dest='sensor_width', default=0, help='Sensor width in same units as focal length. Must be > 0')
     parser.add_argument('-fl', dest='focal_length', default=0, help='effective focal length in same units as sensor width. Must be > 0')
     parser.add_argument('-mk', dest='marked_image', default=False, help='If true then will output marked up image.  Default false.')
     parser.add_argument('-cr', dest='camera_rotation', default=0, help='Camera rotation (0, 90, 180, 270).  0 is camera top forward and increases counter-clockwise.' )
     parser.add_argument('-md', dest='max_distance', default=12, help='Maximum radius in centimeters to consider two items the same between multiple images.')
+    parser.add_argument('-rs', dest='resolution', default=0, help='Calculated image resolution in centimeter/pixel.')
 
     args = parser.parse_args()
     
@@ -40,16 +42,23 @@ if __name__ == '__main__':
     start_row_num = int(args.starting_row_number)
     row_skip_num = int(args.row_skip_number)
     qr_size = float(args.qr_size)
-    plant_size = float(args.plant_size)
+    min_plant_size = float(args.min_plant_size)
+    max_plant_size = float(args.max_plant_size)
     camera_height = float(args.camera_height)
     sensor_width = float(args.sensor_width)
     focal_length = float(args.focal_length)
     use_marked_image = args.marked_image
     camera_rotation = int(args.camera_rotation)
     max_distance = float(args.max_distance)
+    provided_resolution = float(args.resolution)
     
-    if qr_size <= 0 or plant_size <= 0 or camera_height <= 0 or sensor_width <= 0 or focal_length <= 0:
+    if qr_size <= 0 or min_plant_size <= 0 or max_plant_size <= 0:
         print "\nError: One or more arguments were not greater than zero.\n"
+        parser.print_help()
+        sys.exit(1)
+    
+    if provided_resolution <= 0 and (camera_height <= 0 or sensor_width <= 0 or focal_length <= 0):
+        print "\nError: Resolution not provided so camera height, sensor width and focal length must be non-zero."
         parser.print_help()
         sys.exit(1)
         
@@ -68,7 +77,7 @@ if __name__ == '__main__':
     
     print "\nFound {0} images to process".format(len(image_filenames))
     
-    geo_images = parse_geo_file(image_geo_file, focal_length, camera_rotation, camera_height, sensor_width)
+    geo_images = parse_geo_file(image_geo_file, provided_resolution, focal_length, camera_rotation, camera_height, sensor_width)
             
     print "Parsed {0} geo images".format(len(geo_images))
     
@@ -84,7 +93,7 @@ if __name__ == '__main__':
     in_row = True
     
     qr_locator = QRLocator(qr_size)
-    plant_locator = PlantLocator(plant_size)
+    plant_locator = PlantLocator(min_plant_size, max_plant_size)
     item_extractor = ItemExtractor([qr_locator, plant_locator])
     
     ImageWriter.level = ImageWriter.DEBUG
@@ -102,7 +111,7 @@ if __name__ == '__main__':
             need_to_start_new_row = False
             in_row = False
         '''
-        print "Analyzing image [{0}/{1}]".format(i+1, len(geo_images))
+        print "Analyzing image {0} [{1}/{2}]".format(geo_image.file_name, i+1, len(geo_images))
         
         full_filename = os.path.join(image_directory, geo_image.file_name)
         

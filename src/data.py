@@ -4,13 +4,14 @@ from math import sqrt
 
 class GeoImage(object):
     '''Image properties with X,Y,Z position and heading. All distances in centimeters.'''
-    def __init__(self, file_name, image_time=0, position=(0,0,0), heading_degrees=0, focal_length=0,
-                  camera_rotation_degrees=0, camera_height=0, sensor_width=0, size=(0,0)):
+    def __init__(self, file_name, image_time=0, position=(0,0,0), heading_degrees=0, provided_resolution=0, 
+                  focal_length=0, camera_rotation_degrees=0, camera_height=0, sensor_width=0, size=(0,0)):
         '''Constructor.'''
         self.file_name = file_name
         self.image_time = image_time
         self.position = position
-        self.heading_degrees = heading_degrees 
+        self.heading_degrees = heading_degrees
+        self.provided_resolution = provided_resolution # resolution (cm/pix) that user specified. 
         self.focal_length = focal_length
         self.camera_rotation_degrees = camera_rotation_degrees # 0 degrees camera top forward. Increase CCW.
         self.camera_height = camera_height
@@ -20,6 +21,8 @@ class GeoImage(object):
     @property
     def resolution(self):
         '''Return centimeter/pixel resolution.'''
+        if self.provided_resolution > 0:
+            return self.provided_resolution # User resolution overrides calculated resolution.
         if self.focal_length <= 0 or self.size[0] <= 0:
             return 0 #  Avoid division by zero or negative results
         hfov = self.camera_height * (self.sensor_width / self.focal_length)

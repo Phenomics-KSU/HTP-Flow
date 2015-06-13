@@ -56,7 +56,7 @@ def read_images(image_directory, extensions):
             print 'Skipping file {0} due to unsupported extension'.format(fname)
     return image_filenames
     
-def parse_geo_file(image_geo_file, focal_length, camera_rotation, camera_height, sensor_width):
+def parse_geo_file(image_geo_file, provided_resolution, focal_length, camera_rotation, camera_height, sensor_width):
     '''Parse geo file and return list of GeoImage instances.'''
     images = []
     with open(image_geo_file, 'r') as geofile:
@@ -82,7 +82,7 @@ def parse_geo_file(image_geo_file, focal_length, camera_rotation, camera_height,
                 print 'Bad line: {0}'.format(line) 
                 continue
 
-            geo_image = GeoImage(image_name, image_time, (x, y, z), heading, focal_length, camera_rotation, camera_height, sensor_width)
+            geo_image = GeoImage(image_name, image_time, (x, y, z), heading, provided_resolution, focal_length, camera_rotation, camera_height, sensor_width)
             images.append(geo_image)
             
     return images
@@ -107,3 +107,55 @@ def rectangle_center(rectangle):
     '''Returns (x,y) tuple of center of rectangle.'''
     x, y, w, h = rectangle
     return (x + w/2, y + h/2)
+
+def rectangle_corners(rectangle):
+    '''Return top left (x1, y1) and bottom right (x2, y2) corners as flat tuple.'''
+    x, y, w, h = rectangle
+    return (x, y, x+w, y+h)
+
+def distance_between(rect1, rect2):
+    '''Return distance between center of rectangles.'''
+    x1, y1 = rectangle_center(rect1)
+    x2, y2 = rectangle_center(rect2)
+    dx = x1 - x2
+    dy = y1 - y2
+    return sqrt(dx*dx + dy*dy)
+    
+def merge_rectangles(rectangles):
+    '''Return rectangle that contains all rectangles.'''
+    corners = [rectangle_corners(rectangle) for rectangle in rectangles]
+    x1 = min([c[0] for c in corners])
+    y1 = min([c[1] for c in corners])
+    x2 = max([c[2] for c in corners])
+    y2 = max([c[3] for c in corners])
+    return (x1, y1, x2-x1, y2-y1)
+                
+def cluster_rectangles(rectangles, eps):
+    '''Combine rectangles within eps (pixels) of each other.'''
+    groupings = [-1] * len(rectangles)
+    for i, rectangle in enumerate(rectangles):
+        if groupings[i] == -1:
+            groupings[i] = i # haven't been claim yet.
+        for j, other_rectangle in enumerate(rectangles):
+            if i == j:
+                continue # same rectangle
+            if distance_between(rectangle, other_rectangle) < eps:
+                if groupings[j] == -1:
+                    groupings[j] = groupings[i] # claim this rectangle
+                else:
+                    # claim all rectangle with group we're running into
+                    groupings = [groupings[i] if x==groupings[j] else x for x in groupings]
+     
+    used_groupings = list(set(groupings))
+    
+    clustered_rectangles = []
+    for group in used_groupings:
+        # Get all rectangles associated with this group
+        rectangles_in_group = []
+        for i, g in enumerate(groupings):
+            if g == group:
+                rectangles_in_group.append(rectangles[i])
+                
+        clustered_rectangles.append(merge_rectangles(rectangles_in_group))
+   
+    return clustered_rectangles
