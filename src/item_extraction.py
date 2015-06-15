@@ -271,19 +271,6 @@ def extract_image(rectangle, pad, image):
     right = int(min(image_w - 1, x + w + pad))
 
     return image[top:bottom, left:right]
-
-def order_items(items, camera_rotation):
-    '''Return new list but sorted from backward to forward taking into account camera rotation.'''
-    if camera_rotation == 180:  # top to bottom
-        return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[1])
-    elif camera_rotation == 0: # bottom to top
-        return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[1], reverse=True)
-    elif camera_rotation == 90: # left to right
-        return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[0])
-    elif camera_rotation == 270: # right to left
-        return sorted(items, key=lambda item: rectangle_center(item.bounding_rect)[0], reverse=True)
-    else:
-        return None
     
 def calculate_position(item, geo_image):
     '''Return (x,y,z) position of item within geo image.'''
@@ -304,7 +291,4 @@ def calculate_position(item, geo_image):
     z_meters = -geo_image.camera_height / 100
     
     return (geo_image.position[0] + east_offset, geo_image.position[1] + north_offset, geo_image.position[2] + z_meters)
-
-    
-     
     
