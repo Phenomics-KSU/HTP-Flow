@@ -2,6 +2,7 @@
 
 import sys
 import os
+import math
 
 # OpenCV imports
 import cv2 as cv
@@ -75,7 +76,7 @@ def parse_geo_file(image_geo_file, provided_resolution, focal_length, camera_rot
                 z = float(fields[4])
                 roll = float(fields[5])
                 pitch = float(fields[6])
-                heading = float(fields[7])
+                heading = math.degrees(float(fields[7]))
                 # Make sure filename doesn't have extension, we'll add it from image that we're processing.
                 image_name = os.path.splitext(image_name)[0]
             except (IndexError, ValueError):
