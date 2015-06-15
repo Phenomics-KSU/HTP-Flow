@@ -88,6 +88,27 @@ def parse_geo_file(image_geo_file, provided_resolution, focal_length, camera_rot
             
     return images
 
+def parse_grouping_file(group_filename):
+    '''Parse file and return list of tuples (group_name, number_plants) for each row.'''
+    groups = []
+    with open(group_filename, 'r') as group_file:
+        lines = group_file.readlines()
+        for line in lines:
+            if line.isspace():
+                continue
+            fields = [field.strip() for field in line.split(',')]
+            if len(fields) == 0:
+                continue
+            try:
+                group_name = fields[0]
+                number_plants = int(fields[1])
+                groups.append((group_name, number_plants))
+            except (IndexError, ValueError):
+                print 'Bad line: {0}'.format(line) 
+                continue
+            
+    return groups
+
 def verify_geo_images(geo_images, image_filenames):
     '''Verify each geo image exists in specified image file names. Return # missing images.'''
     missing_image_count = 0

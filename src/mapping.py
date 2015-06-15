@@ -3,6 +3,7 @@
 import sys
 import os
 import argparse
+from collections import Counter
 
 # OpenCV imports
 import cv2 as cv
@@ -19,6 +20,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Extract plants from images and assign to group using QR code.')
     parser.add_argument('image_directory', help='where to search for images to process')
     parser.add_argument('image_geo_file', help='file with position/heading data for each image.')
+    parser.add_argument('group_info_file', help='file with group numbers and corresponding number of plants.')
     parser.add_argument('output_directory', help='where to write output files')
     parser.add_argument('starting_row_number', help='Row number for starting images')
     parser.add_argument('row_skip_number', help='How many rows to skip when moving to next row')
@@ -38,6 +40,7 @@ if __name__ == '__main__':
     # convert command line arguments
     image_directory = args.image_directory
     image_geo_file = args.image_geo_file
+    group_info_file = args.group_info_file
     out_directory = args.output_directory
     start_row_num = int(args.starting_row_number)
     row_skip_num = int(args.row_skip_number)
@@ -81,6 +84,16 @@ if __name__ == '__main__':
             
     print "Parsed {0} geo images".format(len(geo_images))
     
+    grouping_info = parse_grouping_file(group_info_file)
+    
+    print "Parsed {0} groups. ".format(len(grouping_info))
+    
+    grouping_info_names = [g[0] for g in grouping_info]
+    for name, count in Counter(grouping_info_names).most_common():
+        if count > 1:
+            print "ERROR: found {} groups named {} in {}".format(count, name, group_info_file)
+            sys.exit(1)
+        
     print "Sorting images by timestamp."
     geo_images = sorted(geo_images, key=lambda image: image.image_time)
     
@@ -206,7 +219,7 @@ if __name__ == '__main__':
     if current_row is not None:
         print "Ended in middle of row {0}.  It will not be processed. Row start image {1}".format(current_row.number, current_row.start_code.file_name)
 
-    groups = []
+    plant_groups = []
     for row in rows:
         print "Finding plant groupings in row {0}".format(row.number)
         
@@ -215,7 +228,7 @@ if __name__ == '__main__':
             if item.item_type == 'code-group':
                 if current_group is not None:
                     # End current group.
-                    groups.append(current_group)
+                    plant_groups.append(current_group)
                     current_group = None
                     
                 # Start a new group.
@@ -227,10 +240,41 @@ if __name__ == '__main__':
                     print "TODO: Hit plant in row before group"
                 else:
                     current_group.plants.append(item)
+                    
+    for group in plant_groups:
+        # Find expected number of plants in group so we can do validations/corrections.
+        try:
+            grouping_index = [y[0] for y in grouping_info].index(group.name)
+            expected_num_plants = grouping_info[grouping_index][1]
+        except ValueError:
+            # TODO handle better
+            print 'WARNING: Group {0} not found in provided group list. Skipping.'.format(group.name)
+            continue
+        
+        # First need to make actual/expected number of plants match.
+        num_plants = len(group.plants)
 
+        if num_plants > expected_num_plants:
+            pass # group = remove_false_positive_plants(group, expected_num_plants)
+        elif num_plants < expected_num_plants:
+            pass # group = add_missing_plants(group, expected_num_plants)
+            
+        # Now fill in any gaps.
+        #group = include_gaps(group)
+        
     print len(items)
     for item in items:
         print item.name
         print item.position
         for other_item in item.other_items:
             print "\t{0}".format(other_item.position)
+        if len(item.other_items) > 0:
+            item_references = [item] + item.other_items
+            average_x = np.mean([item.position[0] for item in item_references])
+            average_y = np.mean([item.position[1] for item in item_references])
+            average_z = np.mean([item.position[2] for item in item_references])
+            distances = [position_difference(item_ref.position, (average_x, average_y)) for item_ref in item_references]
+            print "\tAvg: {0} Max: {1}".format(np.mean(distances), np.max(distances)) 
+        
+                
+

@@ -80,29 +80,39 @@ class PlantGroup(object):
         self.plants = plants
         if self.plants is None:
             self.plants = []
+            
+    @property
+    def name(self):
+        return self.start_code.name
     @property
     def entry(self):
         return self.start_code.name[:-1]
     @property
     def rep(self):
         return self.start_code.name[-1]
+
+def position_difference(position1, position2):
+    '''Return difference in XY positions between both items.'''
+    delta_x = position1[0] - position2[0]
+    delta_y = position1[1] - position2[1]
+    return sqrt(delta_x*delta_x + delta_y*delta_y)
         
 def is_same_item(item1, item2, max_position_difference):
-    '''returns true if both items are similar enough to be considered the same.'''
+    '''Return true if both items are similar enough to be considered the same.'''
     if item1.item_type != item2.item_type:
         return False
     
     if item1.parent_image == item2.parent_image:
         return False # Come from same image so can't be different.
     
-    delta_x = item1.position[0] - item2.position[0]
-    delta_y = item1.position[1] - item2.position[1]
-    position_difference = sqrt(delta_x*delta_x + delta_y*delta_y)
-    
+    if 'code' in item1.item_type: 
+        if item1.name == item2.name:
+            return True # Same QR code (which are unique) so must be same item. 
+
     # convert max difference from cm to meters
     max_position_difference /= 100.0
     
-    if position_difference > max_position_difference:
+    if position_difference(item1.position, item2.position) > max_position_difference:
         return False # Too far apart
     
     return True # Similar enough
