@@ -1,5 +1,8 @@
 #! /usr/bin/env python
 
+import time
+from math import sqrt
+
 # Project imports
 from data import *
 from image_utils import *
@@ -42,7 +45,7 @@ def process_geo_images(geo_images, item_extractor, camera_rotation, image_direct
         
         print 'Found {0} items.'.format(len(image_items))
         for item in image_items:
-            print "Type: {0} Name: {1}".format(item.item_type, item.name)
+            print "Type: {0} Name: {1}".format(item.type, item.name)
 
         items.extend(image_items)
 
@@ -89,16 +92,15 @@ def group_into_rows(items):
     current_row = None
     outside_row_plants = [] # plants found not in a row.
     for item in items:
-        if item.item_type == 'code-row':
-            row_number = int(item.name)
+        if item.type == 'RowCode':
             if current_row is None:
                 # Start a new row.
                 current_row = Row(start_code=item)
-            elif row_number == current_row.number:
+            elif item.row_number == current_row.number:
                 # Ending current row.
                 current_row.end_code = item
-                current_row = None
                 rows.append(current_row)
+                current_row = None
                 continue
             else:
                 # Unexpectedly hit next row.  Likely missed row end QR code.
@@ -107,7 +109,7 @@ def group_into_rows(items):
             if current_row is not None:
                 current_row.items.append(item)
             else: # Not in a row.
-                if item.item_type == 'code-group':
+                if item.type == 'GroupCode':
                     # Hit a QR code outside of row.  This means we likely missed the row start code.
                     print "HIT QR GROUP CODE OUTSIDE OF ROW!!!" # TODO have user fix
                 else:
@@ -124,7 +126,7 @@ def split_into_plant_groupings(rows):
         
         current_group = None
         for item in row.items:
-            if item.item_type == 'code-group':
+            if item.type == 'GroupCode':
                 if current_group is not None:
                     # End current group.
                     plant_groups.append(current_group)
@@ -138,7 +140,7 @@ def split_into_plant_groupings(rows):
                     # TODO: Need to look up and add to previous group from 2 rows ago.
                     print "TODO: Hit plant in row before group"
                 else:
-                    current_group.plants.append(item)
+                    current_group.add_item(item)
                     
     return plant_groups
 
@@ -155,7 +157,7 @@ def correct_plant_groupings(plant_groups, grouping_info):
             continue
         
         # First need to make actual/expected number of plants match.
-        num_plants = len(group.plants)
+        num_plants = len(group.items)
 
         if num_plants > expected_num_plants:
             pass # group = remove_false_positive_plants(group, expected_num_plants)
@@ -164,3 +166,50 @@ def correct_plant_groupings(plant_groups, grouping_info):
             
         # Now fill in any gaps.
         #group = include_gaps(group)
+        
+def position_difference(position1, position2):
+    '''Return difference in XY positions between both items.'''
+    delta_x = position1[0] - position2[0]
+    delta_y = position1[1] - position2[1]
+    return sqrt(delta_x*delta_x + delta_y*delta_y)
+        
+def is_same_item(item1, item2, max_position_difference):
+    '''Return true if both items are similar enough to be considered the same.'''
+    if item1.type != item2.type:
+        return False
+    
+    if item1.parent_image == item2.parent_image:
+        return False # Come from same image so can't be different.
+    
+    if 'Code' in item1.type: 
+        if item1.name == item2.name:
+            # Same QR code so give ourselves more room to work with.
+            # Can't just say they're the same because row/start end could have same name.
+            max_position_difference = max(max_position_difference, 30)
+
+    # convert max difference from cm to meters
+    max_position_difference /= 100.0
+    
+    if position_difference(item1.position, item2.position) > max_position_difference:
+        return False # Too far apart
+    
+    return True # Similar enough
+        
+def export_results(groups, out_directory):
+    '''Write all items in groups out to results file. Return file path.'''
+    out_filename = time.strftime("_results-%Y%m%d-%H%M%S.csv")
+    out_filepath = os.path.join(out_directory, out_filename)
+    with open(out_filepath, 'w') as out_file:
+        for group in groups:
+            for item in group.items:
+                out_file.write('{},{},{},{},{},{},{},{},{}'.format(
+                               item.type,
+                               item.name,
+                               item.position,
+                               item.size,
+                               item.row,
+                               item.range,
+                               item.image_path,
+                               item.parent_image,
+                               item.number_within_group))
+    return out_filepath

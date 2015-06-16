@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-from math import sqrt
-
 class GeoImage(object):
     '''Image properties with X,Y,Z position and heading. All distances in centimeters.'''
     def __init__(self, file_name, image_time=0, position=(0,0,0), heading_degrees=0, provided_resolution=0, 
@@ -39,81 +37,100 @@ class Row(object):
     
     @property
     def number(self):
-        '''Return row number of -1 if not set.'''
-        try:
-            row_number = int(self.start_code.name)
-        except (ValueError, TypeError):
-            row_number = -1
-        return row_number
-            
+        return self.start_code.row_number
+
 class FieldItem(object):
     '''Item found within image'''
-    def __init__(self, item_type, name, position=(0,0,0), size=(0,0), row=0, range_grid=0,
-                  image_path='', parent_image='', bounding_rect=None, classification='auto'):
+    def __init__(self, name, position=(0,0,0), size=(0,0), row=0, range_grid=0,
+                  image_path='', parent_image='', bounding_rect=None, 
+                  number_within_field=0, number_within_row=0):
         '''Constructor.'''
-        self.item_type = item_type
-        self.name = name 
+        self.name = name # identifier 
         self.position = position
         self.size = size
-        self.row = row 
+        self.row = row
         self.range = range_grid
         self.image_path = image_path
         self.parent_image = parent_image
         self.bounding_rect = bounding_rect
-        self.classification = classification
+        self.number_within_field = number_within_field
+        self.number_within_row = number_within_row
         self.other_items = [] # same field item from different images
         
-class Plant(FieldItem):
-    '''Plant found within image'''
-    def __init__(self, item_type, name, position=(0,0,0), size=(0,0), row=0, range_grid=0,
-                  image_path='', parent_image='', bounding_rect=None, classification='auto', number=0):
+    @property
+    def type(self):
+        return self.__class__.__name__
+        
+class GroupItem(FieldItem):
+    '''Field item that belongs to grouping.'''
+    def __init__(self, *args, **kwargs):
         '''Constructor.'''
-        super(Plant, self).__init__(item_type, name, position, size, row, range_grid, image_path, parent_image, bounding_rect, classification)
-        self.number = number
+        super(GroupItem, self).__init__(*args, **kwargs)
         self.group = None
+        
+    @property
+    def number_within_group(self):
+        '''Return index number within grouping or -1 if not in a group.'''
+        try:
+            return self.group.items.index(self)
+        except (AttributeError, ValueError):
+            return -1
+    
+class Plant(GroupItem):
+    '''Plant found within image'''
+    def __init__(self, *args, **kwargs):
+        '''Constructor.'''
+        super(Plant, self).__init__(*args, **kwargs)
+        
+class Gap(GroupItem):
+    '''Gap detected within grouping.'''
+    def __init__(self, *args, **kwargs):
+        '''Constructor.'''
+        super(Gap, self).__init__(*args, **kwargs)
+        
+class GroupCode(GroupItem):
+    '''Code found within image corresponding to plant grouping. Name should be entry followed by single character rep ie 1234a.'''
+    def __init__(self, *args, **kwargs):
+        '''Constructor.'''
+        super(GroupCode, self).__init__(*args, **kwargs)
+    
+    @property
+    def entry(self):
+        return self.name[:-1]
+    @property
+    def rep(self):
+        return self.name[-1]
+    
+class RowCode(FieldItem):
+    '''Code found within image corresponding to a row start/end. Name should be 'row#' where # is the row number.'''
+    def __init__(self, *args, **kwargs):
+        '''Constructor.'''
+        super(RowCode, self).__init__(*args, **kwargs)
+        self.row_number = int(self.name[3:])
         
 class PlantGroup(object):
     '''Plant grouping. Entry number and repetition. '''
-    def __init__(self, start_code=None, plants=None):
+    def __init__(self, start_code=None, items=None):
         '''Constructor.'''
         self.start_code = start_code
-        self.plants = plants
-        if self.plants is None:
-            self.plants = []
-            
+        self.items = items
+        if self.items is None:
+            self.items = []
+    
     @property
     def name(self):
         return self.start_code.name
     @property
     def entry(self):
-        return self.start_code.name[:-1]
+        return self.start_code.entry
     @property
     def rep(self):
-        return self.start_code.name[-1]
-
-def position_difference(position1, position2):
-    '''Return difference in XY positions between both items.'''
-    delta_x = position1[0] - position2[0]
-    delta_y = position1[1] - position2[1]
-    return sqrt(delta_x*delta_x + delta_y*delta_y)
-        
-def is_same_item(item1, item2, max_position_difference):
-    '''Return true if both items are similar enough to be considered the same.'''
-    if item1.item_type != item2.item_type:
-        return False
+        return self.start_code.rep
     
-    if item1.parent_image == item2.parent_image:
-        return False # Come from same image so can't be different.
-    
-    if 'code' in item1.item_type: 
-        if item1.name == item2.name:
-            return True # Same QR code (which are unique) so must be same item. 
-
-    # convert max difference from cm to meters
-    max_position_difference /= 100.0
-    
-    if position_difference(item1.position, item2.position) > max_position_difference:
-        return False # Too far apart
-    
-    return True # Similar enough
+    def add_item(self, item):
+        '''Add item to list of items and updates item reference. Raise ValueError if item is None.'''
+        if item is None:
+            raise ValueError('Cannot add None item to item group.')
+        self.items.append(item)
+        item.group = self
     

@@ -10,7 +10,7 @@ import cv2 as cv
 # Project imports
 from data import *
 
-class ImageWriter:
+class ImageWriter(object):
     '''Facilitate writing output images to an output directory.'''
     DEBUG = 0
     NORMAL = 1
@@ -135,13 +135,13 @@ def rectangle_corners(rectangle):
     x, y, w, h = rectangle
     return (x, y, x+w, y+h)
 
-def distance_between(rect1, rect2):
+def distance_between_rects(rect1, rect2):
     '''Return distance between center of rectangles.'''
     x1, y1 = rectangle_center(rect1)
     x2, y2 = rectangle_center(rect2)
     dx = x1 - x2
     dy = y1 - y2
-    return sqrt(dx*dx + dy*dy)
+    return math.sqrt(dx*dx + dy*dy)
     
 def merge_rectangles(rectangles):
     '''Return rectangle that contains all rectangles.'''
@@ -161,7 +161,7 @@ def cluster_rectangles(rectangles, eps):
         for j, other_rectangle in enumerate(rectangles):
             if i == j:
                 continue # same rectangle
-            if distance_between(rectangle, other_rectangle) < eps:
+            if distance_between_rects(rectangle, other_rectangle) < eps:
                 if groupings[j] == -1:
                     groupings[j] = groupings[i] # claim this rectangle
                 else:

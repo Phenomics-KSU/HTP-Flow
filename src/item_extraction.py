@@ -39,10 +39,12 @@ class ItemExtractor:
             
             extracted_image = extract_image(item.bounding_rect, 20, image)
             
-            extracted_image_fname = "{0}_{1}.jpg".format(item.item_type, item.name)
+            extracted_image_fname = "{0}_{1}.jpg".format(item.type, item.name)
             extracted_image_path = ImageWriter.save_normal(extracted_image_fname, extracted_image)
             
             item.image_path = extracted_image_path
+            
+            item.parent_image = geo_image.file_name
             
             item.position = calculate_position(item, geo_image)
         
@@ -85,9 +87,12 @@ class QRLocator:
             scan_successful = len(qr_data) != 0
 
             if scan_successful:
-                qr_item = FieldItem(item_type = 'code', name = 'default', parent_image = geo_image.file_name, bounding_rect = rectangle)
-                qr_item.name = qr_data[0]
-                qr_items.append(qr_item)
+                qr_code = create_qr_code(qr_data[0], rectangle) 
+                
+                if qr_code is None:
+                    print 'WARNING: Invalid QR data found ' + qr_data[0]
+                else:
+                    qr_items.append(qr_code)
                 
             if marked_image is not None:
                 # Show success/failure using colored bounding box.
@@ -220,7 +225,7 @@ class PlantLocator:
         for i, rectangle in enumerate(rectangle_clusters):
             
             # Just give default name for saving image until we later go through and assign to plant group.
-            plant = Plant(item_type = 'plant', name = 'plant{0}'.format(i), parent_image = geo_image.file_name, bounding_rect = rectangle)
+            plant = Plant(name = 'plant' + str(i), bounding_rect = rectangle)
             plants.append(plant)
                 
             if marked_image is not None:
@@ -292,3 +297,21 @@ def calculate_position(item, geo_image):
     
     return (geo_image.position[0] + east_offset, geo_image.position[1] + north_offset, geo_image.position[2] + z_meters)
     
+def create_qr_code(qr_data, bounding_rect):
+    '''Return either GroupCode or RowCode depending on qr data.  Return None if neither.'''
+    # We have the most QR group codes so try to create one first.
+    qr_item = GroupCode(name = qr_data)
+    if qr_item.entry.isdigit() and len(qr_item.rep) == 1:
+        pass # put any special setup code for group code here.
+    else:
+        # Wasn't a group code so check if it's a row code.
+        if qr_data[:3] == 'row' and qr_data[3:].isdigit():
+            qr_item = RowCode(name = qr_data)
+        else:
+            # Wasn't a recognized code.
+            return None
+        
+    # Fill in any common fields here.
+    qr_item.bounding_rect = bounding_rect
+
+    return qr_item

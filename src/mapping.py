@@ -17,7 +17,7 @@ from item_processing import *
 
 if __name__ == '__main__':
     '''Extract plants from images and assign to group using QR code'''
-    
+
     parser = argparse.ArgumentParser(description='Extract plants from images and assign to group using QR code.')
     parser.add_argument('image_directory', help='where to search for images to process')
     parser.add_argument('image_geo_file', help='file with position/heading data for each image.')
@@ -126,13 +126,15 @@ if __name__ == '__main__':
         print "Detected {0} plants outside of rows.".format(len(outside_row_plants))
 
     if current_row is not None:
-        print "Ended in middle of row {0}.  It will not be processed. Row start image {1}".format(current_row.number, current_row.start_code.file_name)
+        print "Ended in middle of row {0}.  It will not be processed. Row start image {1}".format(current_row.number, current_row.start_code.image_path)
 
     plant_groups = split_into_plant_groupings(rows)
                     
     #plant_groups = correct_plant_groupings(plant_groups, grouping_info)
         
     # Write everything out to CSV file to be imported into database.
+    result_filepath = export_results(plant_groups, out_directory)
+    print "Exported results to " + result_filepath
 
     print len(items)
     for item in items:
