@@ -66,4 +66,6 @@ if __name__ == '__main__':
         new_filepath = os.path.join(input_directory, new_filename)
         os.rename(old_filepath, new_filepath)
         
+        number_renamed += 1
+        
     print 'Renamed {0} files.'.format(number_renamed)

@@ -4,6 +4,7 @@ import sys
 import os
 import argparse
 from collections import Counter
+import copy
 
 # OpenCV imports
 import cv2 as cv
@@ -23,8 +24,8 @@ if __name__ == '__main__':
     parser.add_argument('image_geo_file', help='file with position/heading data for each image.')
     parser.add_argument('group_info_file', help='file with group numbers and corresponding number of plants.')
     parser.add_argument('output_directory', help='where to write output files')
-    parser.add_argument('starting_row_number', help='Row number for starting images')
-    parser.add_argument('row_skip_number', help='How many rows to skip when moving to next row')
+    #parser.add_argument('starting_row_number', help='Row number for starting images')
+    #parser.add_argument('row_skip_number', help='How many rows to skip when moving to next row')
     parser.add_argument('-qr', dest='qr_size', default=0, help='side length of QR item in centimeters. Must be > 0')
     parser.add_argument('-minps', dest='min_plant_size', default=0, help='Minimum plant size in centimeters. Must be > 0')
     parser.add_argument('-maxps', dest='max_plant_size', default=0, help='Maximum plant size in centimeters. Must be > 0')
@@ -35,7 +36,9 @@ if __name__ == '__main__':
     parser.add_argument('-cr', dest='camera_rotation', default=0, help='Camera rotation (0, 90, 180, 270).  0 is camera top forward and increases counter-clockwise.' )
     parser.add_argument('-md', dest='max_distance', default=12, help='Maximum radius in centimeters to consider two items the same between multiple images.')
     parser.add_argument('-rs', dest='resolution', default=0, help='Calculated image resolution in centimeter/pixel.')
-
+    parser.add_argument('-debug_start', dest='debug_start', default='__none__', help='Substring in image name to start processing at.')
+    parser.add_argument('-debug_stop', dest='debug_stop', default='__none__', help='Substring in image name to stop processing at.')
+    
     args = parser.parse_args()
     
     # convert command line arguments
@@ -43,8 +46,8 @@ if __name__ == '__main__':
     image_geo_file = args.image_geo_file
     group_info_file = args.group_info_file
     out_directory = args.output_directory
-    start_row_num = int(args.starting_row_number)
-    row_skip_num = int(args.row_skip_number)
+    #start_row_num = int(args.starting_row_number)
+    #row_skip_num = int(args.row_skip_number)
     qr_size = float(args.qr_size)
     min_plant_size = float(args.min_plant_size)
     max_plant_size = float(args.max_plant_size)
@@ -55,6 +58,8 @@ if __name__ == '__main__':
     camera_rotation = int(args.camera_rotation)
     max_distance = float(args.max_distance)
     provided_resolution = float(args.resolution)
+    debug_start = args.debug_start
+    debug_stop = args.debug_stop
     
     if qr_size <= 0 or min_plant_size <= 0 or max_plant_size <= 0:
         print "\nError: One or more arguments were not greater than zero.\n"
@@ -71,7 +76,7 @@ if __name__ == '__main__':
         print "Error: Camera rotation {0} invalid.  Possible choices are {1}".format(camera_rotation, possible_camera_rotations)
         sys.exit(1)
         
-    current_row_num = start_row_num
+    #current_row_num = start_row_num
     
     image_filenames = read_images(image_directory, ['tiff', 'tif', 'jpg', 'jpeg', 'png'])
                         
@@ -84,6 +89,17 @@ if __name__ == '__main__':
     geo_images = parse_geo_file(image_geo_file, provided_resolution, focal_length, camera_rotation, camera_height, sensor_width)
             
     print "Parsed {0} geo images".format(len(geo_images))
+    
+    geo_image_filenames = [g.file_name for g in geo_images]
+    start_geo_index = index_containing_substring(geo_image_filenames, debug_start)
+    if start_geo_index < 0:
+        start_geo_index = 0
+    stop_geo_index = index_containing_substring(geo_image_filenames, debug_stop)
+    if stop_geo_index < 0:
+        stop_geo_index = len(geo_images) - 1
+        
+    print "Processing geo images {} through {}".format(start_geo_index, stop_geo_index)
+    geo_images = geo_images[start_geo_index+1 : stop_geo_index+1]
     
     grouping_info = parse_grouping_file(group_info_file)
     
@@ -132,9 +148,62 @@ if __name__ == '__main__':
                     
     #plant_groups = correct_plant_groupings(plant_groups, grouping_info)
         
+    '''
     # Write everything out to CSV file to be imported into database.
-    result_filepath = export_results(plant_groups, out_directory)
-    print "Exported results to " + result_filepath
+    all_results_filename = time.strftime("_results_all-%Y%m%d-%H%M%S.csv")
+    all_results_filepath = os.path.join(out_directory, all_results_filename)
+    all_output_items = []
+    for group in plant_groups:
+        all_output_items.extend([group.start_code] + group.start_code.other_items + group.items)
+        for item in group.items:
+            all_output_items.extend(item.other_items)
+    export_results(all_output_items, all_results_filepath)
+    print "Exported all results to " + all_results_filepath
+    
+    # Write averaged results out to file.
+    avg_results_filename = time.strftime("_results_averaged-%Y%m%d-%H%M%S.csv")
+    avg_results_filepath = os.path.join(out_directory, avg_results_filename)
+    avg_output_items = []
+    for group in plant_groups:
+        print 'Averaging group ' + group.name
+        for item in [group.start_code] + group.items:
+            print '    Item: ' + item.name
+            avg_item = copy.copy(item)
+            item_references = [avg_item] + avg_item.other_items
+            avg_x = np.mean([item.position[0] for item in item_references])
+            avg_y = np.mean([item.position[1] for item in item_references])
+            avg_z = np.mean([item.position[2] for item in item_references])
+            avg_item.position = (avg_x, avg_y, avg_z)
+            avg_output_items.append(avg_item)
+    print 'Output averaged {0} items'.format(len(avg_output_items))
+    export_results(avg_output_items, avg_results_filepath)
+    print "Exported averaged results to " + avg_results_filepath
+    '''
+
+    # Write everything out to CSV file to be imported into database.
+    all_results_filename = time.strftime("_results_all-%Y%m%d-%H%M%S.csv")
+    all_results_filepath = os.path.join(out_directory, all_results_filename)
+    all_output_items = []
+    for item in items:
+        all_output_items.extend([item] + item.other_items)
+    export_results(all_output_items, all_results_filepath)
+    print "Exported all results to " + all_results_filepath
+    
+    # Write averaged results out to file.
+    avg_results_filename = time.strftime("_results_averaged-%Y%m%d-%H%M%S.csv")
+    avg_results_filepath = os.path.join(out_directory, avg_results_filename)
+    avg_output_items = []
+    for item in items:
+        avg_item = item # copy.copy(item)
+        item_references = [avg_item] + avg_item.other_items
+        avg_x = np.mean([item.position[0] for item in item_references])
+        avg_y = np.mean([item.position[1] for item in item_references])
+        avg_z = np.mean([item.position[2] for item in item_references])
+        avg_item.position = (avg_x, avg_y, avg_z)
+        avg_output_items.append(avg_item)
+    print 'Output averaged {0} items'.format(len(avg_output_items))
+    export_results(avg_output_items, avg_results_filepath)
+    print "Exported averaged results to " + avg_results_filepath
 
     print len(items)
     for item in items:

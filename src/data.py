@@ -106,16 +106,18 @@ class RowCode(FieldItem):
     def __init__(self, *args, **kwargs):
         '''Constructor.'''
         super(RowCode, self).__init__(*args, **kwargs)
-        self.row_number = int(self.name[3:])
+        self.row_number = int(self.name[2:])
         
 class PlantGroup(object):
     '''Plant grouping. Entry number and repetition. '''
-    def __init__(self, start_code=None, items=None):
+    def __init__(self, start_code, items=None):
         '''Constructor.'''
-        self.start_code = start_code
         self.items = items
         if self.items is None:
             self.items = []
+        self.start_code = start_code
+        for code in [start_code] + start_code.other_items:
+            code.group = self
     
     @property
     def name(self):
@@ -132,5 +134,7 @@ class PlantGroup(object):
         if item is None:
             raise ValueError('Cannot add None item to item group.')
         self.items.append(item)
-        item.group = self
+        for new_item in [item] + item.other_items:
+            new_item.group = self
+        
     

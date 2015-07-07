@@ -79,12 +79,21 @@ def merge_items(items, max_distance):
                 matching_item = comparision_item
                 break
         if matching_item is None:
+            print 'No matching item for {} adding to list'.format(item.name)
             unique_items.append(item)
         else:
             # We've already stored this same item so just have the one we stored reference this one.
             matching_item.other_items.append(item)
             
     return unique_items
+
+def touches_image_border(item, geo_image):
+    '''Return true if item bounding box touches image border.'''
+    x1, y1, x2, y2 = rectangle_corners(item.bounding_rect)
+    img_w, img_h = geo_image.size
+    # Need to use (1 and -1) since bounding box has 1 pix border.
+    touches_border = x1 <= 1 or y1 <= 1 or x2 >= (img_w-1) or y2 >= (img_h-1)
+    return touches_border
 
 def group_into_rows(items):
     '''Split items into list of rows.  Current row will be None if didn't end in middle of row.'''
@@ -126,21 +135,29 @@ def split_into_plant_groupings(rows):
         
         current_group = None
         for item in row.items:
+            print item.type
             if item.type == 'GroupCode':
                 if current_group is not None:
+                    print 'Ending group ' + current_group.entry
                     # End current group.
                     plant_groups.append(current_group)
                     current_group = None
                     
                 # Start a new group.
                 current_group = PlantGroup(start_code=item)
+                print 'Starting group ' + current_group.entry
 
             else: # item is a plant since it's not a code.
                 if current_group is None:
                     # TODO: Need to look up and add to previous group from 2 rows ago.
                     print "TODO: Hit plant in row before group"
                 else:
+                    print 'Adding plant'
                     current_group.add_item(item)
+                    
+            if current_group is not None:
+                # End current group.
+                plant_groups.append(current_group)
                     
     return plant_groups
 
@@ -186,6 +203,9 @@ def is_same_item(item1, item2, max_position_difference):
             # Same QR code so give ourselves more room to work with.
             # Can't just say they're the same because row/start end could have same name.
             max_position_difference = max(max_position_difference, 30)
+        else:
+            # Two codes with different names so can't be same item.
+            return False
 
     # convert max difference from cm to meters
     max_position_difference /= 100.0
@@ -195,21 +215,51 @@ def is_same_item(item1, item2, max_position_difference):
     
     return True # Similar enough
         
-def export_results(groups, out_directory):
-    '''Write all items in groups out to results file. Return file path.'''
-    out_filename = time.strftime("_results-%Y%m%d-%H%M%S.csv")
-    out_filepath = os.path.join(out_directory, out_filename)
+def export_results(items, out_filepath):
+    '''Write all items to results file.'''
     with open(out_filepath, 'w') as out_file:
-        for group in groups:
-            for item in group.items:
-                out_file.write('{},{},{},{},{},{},{},{},{}'.format(
-                               item.type,
-                               item.name,
-                               item.position,
-                               item.size,
-                               item.row,
-                               item.range,
-                               item.image_path,
-                               item.parent_image,
-                               item.number_within_group))
+        # Write out header
+        out_file.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(
+               'Type',
+               'Entry',
+               'Rep',
+               'Num Within Field',
+               'Num Within Row',
+               'Num Within Group',
+               'Row',
+               'Range',
+               'Easting',
+               'Northing',
+               'Altitude',
+               'UTM-Zone',
+               'Image Name',
+               'Parent Image Name'))
+
+        for item in items:
+            
+            has_group = hasattr(item, 'group') and item.group is not None
+            
+            if not has_group and item.type == 'Plant':
+                continue # don't write out plants outside of a grouping
+            
+            entry = item.group.entry if has_group else ''
+            rep = item.group.rep if has_group else ''
+            number_within_group = item.number_within_group if has_group else -1
+            
+            out_file.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(
+                           item.type,
+                           entry,
+                           rep,
+                           'TODO', # num within field
+                           'TODO', # num within row
+                           number_within_group,
+                           item.row,
+                           item.range,
+                           item.position[0],
+                           item.position[1],
+                           item.position[2],
+                           'TODO', # UTM-Zone
+                           os.path.split(item.image_path)[1],
+                           os.path.split(item.parent_image)[1]))
+
     return out_filepath

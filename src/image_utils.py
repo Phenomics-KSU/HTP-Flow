@@ -125,6 +125,12 @@ def verify_geo_images(geo_images, image_filenames):
             
     return missing_image_count
 
+def index_containing_substring(the_list, substring):
+    for i, s in enumerate(the_list):
+        if substring in s:
+            return i
+    return -1
+
 def rectangle_center(rectangle):
     '''Returns (x,y) tuple of center of rectangle.'''
     x, y, w, h = rectangle

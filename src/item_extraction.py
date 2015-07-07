@@ -15,6 +15,7 @@ import Image # Python Imaging Library
 # Project imports
 from data import *
 from image_utils import *
+from item_processing import *
 
 class ItemExtractor:
     '''Extracts field items from image.'''    
@@ -33,6 +34,19 @@ class ItemExtractor:
         for locator in self.locators:
             located_items = locator.locate(geo_image, image, marked_image)
             field_items.extend(located_items)
+
+        # Filter out any items that touch the image border since it likely doesn't represent entire item.
+        items_without_border_elements = []
+        for item in field_items:
+            if touches_image_border(item, geo_image):
+                # Mark as special color to show user why it wasn't included.
+                if marked_image is not None:
+                    dark_orange = (0, 140, 255) # dark orange
+                    x1, y1, x2, y2 = rectangle_corners(item.bounding_rect) 
+                    cv.rectangle(marked_image, (x1,y1), (x2,y2), dark_orange, 2)
+            else:
+                items_without_border_elements.append(item)
+        field_items = items_without_border_elements
 
         # Extract field items into separate image
         for item in field_items:
@@ -60,7 +74,12 @@ class QRLocator:
         '''Find QR codes in image and decode them.  Return list of FieldItems representing valid QR codes.''' 
         # Threshold grayscaled image to make white QR codes stands out.
         gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-        _, thresh_image = cv.threshold(gray_image, 150, 255, 0)
+        _, thresh_image = cv.threshold(gray_image, 140, 255, 0)
+        
+        # Open mask (to remove noise) and then dilate it to connect contours.
+        kernel = np.ones((5,5), np.uint8)
+        mask_open = cv.morphologyEx(thresh_image, cv.MORPH_OPEN, kernel)
+        thresh_image = cv.dilate(mask_open, kernel, iterations = 1)
         
         # Find outer contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
         contours, hierarchy = cv.findContours(thresh_image.copy(), cv.cv.CV_RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
@@ -87,6 +106,7 @@ class QRLocator:
             scan_successful = len(qr_data) != 0
 
             if scan_successful:
+                
                 qr_code = create_qr_code(qr_data[0], rectangle) 
                 
                 if qr_code is None:
@@ -95,10 +115,12 @@ class QRLocator:
                     qr_items.append(qr_code)
                 
             if marked_image is not None:
-                # Show success/failure using colored bounding box.
-                green = (0, 255, 0)
-                red = (0, 0, 255)
-                item_color = green if scan_successful else red
+                # Show success/failure using colored bounding box
+                success_color = (0, 255, 0) # green
+                if scan_successful and qr_code is not None and qr_code.type == 'RowCode': 
+                    success_color = (0, 255, 255) # yellow for row codes
+                failure_color = (0, 0, 255) # red
+                item_color = success_color if scan_successful else failure_color
                 x,y,w,h = rectangle
                 cv.rectangle(marked_image, (x,y), (x+w,y+h), item_color, 2) 
         
@@ -117,7 +139,7 @@ class QRLocator:
                 image_to_scan = cv.cvtColor(cv_thresh_image, cv.COLOR_GRAY2BGR)
             elif scan_try == 2:
                 cv_gray_image = cv.cvtColor(cv_image, cv.COLOR_BGR2GRAY)
-                _, cv_thresh_image = cv.threshold(cv_gray_image, 165, 255, 0)
+                _, cv_thresh_image = cv.threshold(cv_gray_image, 150, 255, 0)
                 image_to_scan = cv.cvtColor(cv_thresh_image, cv.COLOR_GRAY2BGR)
             else:
                 break # nothing else to try.
@@ -171,19 +193,24 @@ class PlantLocator:
         # Convert Blue-Green-Red color space to HSV
         hsv_image = cv.cvtColor(image, cv.COLOR_BGR2HSV)
             
-        # Threshold the HSV image to get only green colors that correspond to plants.
+        # Threshold the HSV image to get only green colors that correspond to healthy plants.
         green_hue = 60
         lower_green = np.array([green_hue - 30, 90, 50], np.uint8)
         upper_green = np.array([green_hue + 30, 255, 255], np.uint8)
         plant_mask = cv.inRange(hsv_image, lower_green, upper_green)
+        
+      # Now do the same thing for greenish dead plants.
+        lower_dead_green = np.array([10, 35, 60], np.uint8)
+        upper_dead_green = np.array([90, 255, 255], np.uint8)
+        dead_green_plant_mask = cv.inRange(hsv_image, lower_dead_green, upper_dead_green)
     
         # Now do the same thing for yellowish dead plants.
-        lower_yellow = np.array([10, 50, 125], np.uint8)
-        upper_yellow = np.array([40, 255, 255], np.uint8)
-        dead_plant_mask = cv.inRange(hsv_image, lower_yellow, upper_yellow)
+        #lower_yellow = np.array([10, 50, 125], np.uint8)
+        #upper_yellow = np.array([40, 255, 255], np.uint8)
+        #dead_yellow_plant_mask = cv.inRange(hsv_image, lower_yellow, upper_yellow)
         
         filtered_rectangles = []
-        for i, mask in enumerate([plant_mask, dead_plant_mask]):
+        for i, mask in enumerate([plant_mask, dead_green_plant_mask]):
             # Open mask (to remove noise) and then dilate it to connect contours.
             kernel = np.ones((5,5), np.uint8)
             mask_open = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel)
@@ -305,7 +332,7 @@ def create_qr_code(qr_data, bounding_rect):
         pass # put any special setup code for group code here.
     else:
         # Wasn't a group code so check if it's a row code.
-        if qr_data[:3] == 'row' and qr_data[3:].isdigit():
+        if qr_data[:2] == 'R.' and qr_data[2:].isdigit():
             qr_item = RowCode(name = qr_data)
         else:
             # Wasn't a recognized code.
