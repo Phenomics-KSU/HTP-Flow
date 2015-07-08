@@ -3,18 +3,21 @@
 class GeoImage(object):
     '''Image properties with X,Y,Z position and heading. All distances in centimeters.'''
     def __init__(self, file_name, image_time=0, position=(0,0,0), heading_degrees=0, provided_resolution=0, 
-                  focal_length=0, camera_rotation_degrees=0, camera_height=0, sensor_width=0, size=(0,0)):
+                  focal_length=0, camera_rotation_degrees=0, camera_height=0, sensor_width=0, size=(0,0), items=None):
         '''Constructor.'''
-        self.file_name = file_name
-        self.image_time = image_time
-        self.position = position
-        self.heading_degrees = heading_degrees
-        self.provided_resolution = provided_resolution # resolution (cm/pix) that user specified. 
-        self.focal_length = focal_length
+        self.file_name = file_name # name of image file with extension (not full path).
+        self.image_time = image_time # UTC time when image was taken.
+        self.position = position # 3D position of camera in either local ENU frame or UTM when the image was taken.
+        self.heading_degrees = heading_degrees # heading of image with 0 degrees being East and increasing CCW.
+        self.provided_resolution = provided_resolution # resolution (cm/pix) that user specified.  If set then overrides focal length, sensor width and camera height.
+        self.focal_length = focal_length # focal length of lens in centimeters
         self.camera_rotation_degrees = camera_rotation_degrees # 0 degrees camera top forward. Increase CCW.
-        self.camera_height = camera_height
-        self.size = size # Image (width,height) in pixels.
-        self.sensor_width = sensor_width
+        self.camera_height = camera_height # height of camera above ground in centimeters.
+        self.size = size # image (width,height) in pixels.
+        self.sensor_width = sensor_width # width of camera sensor in centimeters
+        self.items = items # list of items located within image.
+        if self.items is None:
+            self.items = []
         
     @property
     def resolution(self):

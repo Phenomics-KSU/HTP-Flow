@@ -7,53 +7,49 @@ from math import sqrt
 from data import *
 from image_utils import *
 
-def process_geo_images(geo_images, item_extractor, camera_rotation, image_directory, out_directory, use_marked_image):
+def process_geo_image(geo_image, item_extractor, camera_rotation, image_directory, out_directory, use_marked_image):
     '''Return list of extracted items sorted in direction of movement.'''
+    full_filename = os.path.join(image_directory, geo_image.file_name)
+    
+    image = cv.imread(full_filename, cv.CV_LOAD_IMAGE_COLOR)
+    
+    if image is None:
+        print 'Cannot open image: {0}'.format(full_filename)
+        return []
+    
+    # Update remaining geo image properties before doing image analysis.  This makes it so we only open image once.
+    image_height, image_width, _ = image.shape
+    geo_image.size = (image_width, image_height)
+    
+    if geo_image.resolution <= 0:
+        print "Cannot calculate image resolution. Skipping image."
+        return []
+    
+    # Specify 'image directory' so that if any images associated with current image are saved a directory is created.
+    image_out_directory = os.path.join(out_directory, os.path.splitext(geo_image.file_name)[0])
+    ImageWriter.output_directory = image_out_directory
+    
+    marked_image = None
+    if use_marked_image:
+        # Copy original image so we can mark on it for debugging.
+        marked_image = image.copy()
+    
+    image_items = item_extractor.extract_items(geo_image, image, marked_image, image_out_directory)
+    
+    image_items = order_items(image_items, camera_rotation)
+
+    if marked_image is not None:
+        marked_image_filename = postfix_filename(geo_image.file_name, '_marked')
+        marked_image_path = os.path.join(out_directory, marked_image_filename)
+        cv.imwrite(marked_image_path, marked_image)
+        
+    return image_items
+
+def all_items(geo_images):
+    '''Return single list of all items found within geo images.'''
     items = []
-    for i, geo_image in enumerate(geo_images):
-
-        print "Analyzing image {0} [{1}/{2}]".format(geo_image.file_name, i+1, len(geo_images))
-        
-        full_filename = os.path.join(image_directory, geo_image.file_name)
-        
-        image = cv.imread(full_filename, cv.CV_LOAD_IMAGE_COLOR)
-
-        if image is None:
-            print 'Cannot open image: {0}'.format(full_filename)
-            continue
-
-        # Update remaining geo image properties before doing image analysis.  This makes it so we only open image once.
-        image_height, image_width, _ = image.shape
-        geo_image.size = (image_width, image_height)
-  
-        if geo_image.resolution <= 0:
-            print "Cannot calculate image resolution. Skipping image."
-            continue
-        
-        # Specify 'image directory' so that if any images associated with current image are saved a directory is created.
-        image_out_directory = os.path.join(out_directory, os.path.splitext(geo_image.file_name)[0])
-        ImageWriter.output_directory = image_out_directory
-
-        marked_image = None
-        if use_marked_image:
-            # Copy original image so we can mark on it for debugging.
-            marked_image = image.copy()
-
-        image_items = item_extractor.extract_items(geo_image, image, marked_image, image_out_directory)
-        
-        image_items = order_items(image_items, camera_rotation)
-        
-        print 'Found {0} items.'.format(len(image_items))
-        for item in image_items:
-            print "Type: {0} Name: {1}".format(item.type, item.name)
-
-        items.extend(image_items)
-
-        if marked_image is not None:
-            marked_image_filename = postfix_filename(geo_image.file_name, '_marked')
-            marked_image_path = os.path.join(out_directory, marked_image_filename)
-            cv.imwrite(marked_image_path, marked_image)
-            
+    for geo_image in geo_images:
+        items.extend(geo_image.items)
     return items
 
 def order_items(items, camera_rotation):
@@ -79,7 +75,7 @@ def merge_items(items, max_distance):
                 matching_item = comparision_item
                 break
         if matching_item is None:
-            print 'No matching item for {} adding to list'.format(item.name)
+            #print 'No matching item for {} adding to list'.format(item.name)
             unique_items.append(item)
         else:
             # We've already stored this same item so just have the one we stored reference this one.

@@ -112,18 +112,20 @@ def parse_grouping_file(group_filename):
 def verify_geo_images(geo_images, image_filenames):
     '''Verify each geo image exists in specified image file names. Return # missing images.'''
     missing_image_count = 0
+    matching_geo_images = []
+    image_filenames_no_ext = [os.path.splitext(fname)[0] for fname in image_filenames]
     for geo_image in geo_images:
-        image_filenames_no_ext = [os.path.splitext(fname)[0] for fname in image_filenames]
         try:
             # Make sure actual image exists and use it's file extension.
             index = image_filenames_no_ext.index(geo_image.file_name)
             extension = os.path.splitext(image_filenames[index])[1][1:]
             geo_image.file_name = "{0}.{1}".format(geo_image.file_name, extension)
+            matching_geo_images.append(geo_image)
         except ValueError:
             # Geo image doesn't have corresponding actual image
             missing_image_count += 1
             
-    return missing_image_count
+    return matching_geo_images, missing_image_count
 
 def index_containing_substring(the_list, substring):
     for i, s in enumerate(the_list):
