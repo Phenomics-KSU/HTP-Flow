@@ -36,9 +36,11 @@ class GeoImage(object):
 
 class Row(object):
     '''Collection of items in field row.'''
-    def __init__(self, start_code=None, end_code=None, items=None):
+    def __init__(self, start_code=None, end_code=None, direction=None, items=None):
+        # Start and end codes are defined to be in the direction of the entire field... not the individual row.
         self.start_code = start_code # QR code on the side of the field where range = 0
         self.end_code = end_code # QR code on the other side of the field.
+        self.direction = direction # Either 'up' if the in same direction as field or 'back' if row runs opposite direction.
         self.items = items # Items in row in order from start -> end.  
         if self.items is None:
             self.items = []

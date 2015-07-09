@@ -18,9 +18,9 @@ from image_utils import *
 from item_processing import *
 
 if __name__ == '__main__':
-    '''Extract QR codes from images.'''
+    '''Extract codes from images.'''
 
-    parser = argparse.ArgumentParser(description='''Extract QR codes from images''')
+    parser = argparse.ArgumentParser(description='''Extract codes from images''')
     parser.add_argument('image_directory', help='where to search for images to process')
     parser.add_argument('image_geo_file', help='file with position/heading data for each image.')
     parser.add_argument('output_directory', help='where to write output files')
