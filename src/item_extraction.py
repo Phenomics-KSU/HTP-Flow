@@ -58,7 +58,7 @@ class ItemExtractor:
             
             item.image_path = extracted_image_path
             
-            item.parent_image = geo_image.file_name
+            item.parent_image_filename = geo_image.file_name
             
             item.position = calculate_position(item, geo_image)
         

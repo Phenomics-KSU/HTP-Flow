@@ -191,7 +191,7 @@ def is_same_item(item1, item2, max_position_difference):
     if item1.type != item2.type:
         return False
     
-    if item1.parent_image == item2.parent_image:
+    if item1.parent_image_filename == item2.parent_image_filename:
         return False # Come from same image so can't be different.
     
     if 'Code' in item1.type: 
@@ -256,6 +256,6 @@ def export_results(items, out_filepath):
                            item.position[2],
                            'TODO', # UTM-Zone
                            os.path.split(item.image_path)[1],
-                           os.path.split(item.parent_image)[1]))
+                           os.path.split(item.parent_image_filename)[1]))
 
     return out_filepath
