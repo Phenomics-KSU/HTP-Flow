@@ -50,13 +50,14 @@ class Row(object):
 
 class FieldItem(object):
     '''Item found within image'''
-    def __init__(self, name, position=(0,0,0), size=(0,0), row=0, range_grid=0,
+    def __init__(self, name, position=(0,0,0), size=(0,0), area=0, row=0, range_grid=0,
                   image_path='', parent_image_filename='', bounding_rect=None, 
                   number_within_field=0, number_within_row=0):
         '''Constructor.'''
         self.name = name # identifier 
         self.position = position # 3D position of camera in either local ENU frame or UTM when the image was taken.
         self.size = size # Width and height of item in centimeters.
+        self.area = area # Area of item in cm^2
         self.row = row # The row the item is found in. First row is #1.  If zero or negative then doesn't belong to a row.
         self.range = range_grid # The range the item is found in.  If row is the 'x' value then the range is the 'y' value and the units are dimensionless.
         self.image_path = image_path # Full path where cropped out image of field item is found.
