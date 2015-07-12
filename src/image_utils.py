@@ -6,6 +6,7 @@ import math
 
 # OpenCV imports
 import cv2 as cv
+import numpy as np
 
 # Project imports
 from data import *
@@ -137,26 +138,60 @@ def index_containing_substring(the_list, substring):
             return i
     return -1
 
-def rectangle_center(rectangle):
+def drawRect(img, rect, color=(0,0,0), thickness=1, rotated=True):
+    '''Draws the rotated rectangle on the specified image.'''
+    if rotated:
+        box = cv.cv.BoxPoints(rect)
+        box = np.int0(box)
+        cv.drawContours(img, [box], 0, color, thickness)
+    else:
+        corners = rectangle_corners(rect, rotate=False)
+        cv.rectangle(img, corners[0], corners[1], color, thickness) 
+
+def rectangle_center(rectangle, rotated=True):
     '''Returns (x,y) tuple of center of rectangle.'''
-    x, y, w, h = rectangle
-    return (x + w/2, y + h/2)
+    if rotated:
+        center, dim, theta = rectangle
+        return center
+    else: 
+        x, y, w, h = rectangle
+        return (x + w/2, y + h/2)
 
-def rectangle_corners(rectangle):
-    '''Return top left (x1, y1) and bottom right (x2, y2) corners as flat tuple.'''
-    x, y, w, h = rectangle
-    return (x, y, x+w, y+h)
+def rectangle_corners(rectangle, rotated=True):
+    '''If non-rotated then returns top left (x1, y1) and bottom right (x2, y2) corners as flat tuple.
+       If rotated then uses BoxPoints to get tuple of 4 corners.'''
+    if rotated:
+        return cv.cv.BoxPoints(rectangle)
+    else:
+        x, y, w, h = rectangle
+        return (x, y, x+w, y+h)
 
-def distance_between_rects(rect1, rect2):
+def rotatedToRegularRect(rotated_rect):
+    '''Return regular non-rotated rectangle that bounds rotated rectangle.'''
+    corners = rectangle_corners(rotated_rect, rotated=True)
+    x_values = [c[0] for c in corners]
+    y_values = [c[1] for c in corners]
+    min_x = min(x_values)
+    min_y = min(y_values)
+    max_x = max(x_values)
+    max_y = max(y_values)
+    width = max_x - min_x
+    height = max_y - min_y
+    return (min_x, min_y, width, height)
+
+def distance_between_rects(rect1, rect2, rotated=True):
     '''Return distance between center of rectangles.'''
-    x1, y1 = rectangle_center(rect1)
-    x2, y2 = rectangle_center(rect2)
+    x1, y1 = rectangle_center(rect1, rotated)
+    x2, y2 = rectangle_center(rect2, rotated)
     dx = x1 - x2
     dy = y1 - y2
     return math.sqrt(dx*dx + dy*dy)
-    
+
 def merge_rectangles(rectangles):
     '''Return rectangle that contains all rectangles.'''
+    
+    raise NotImplementedError
+
     corners = [rectangle_corners(rectangle) for rectangle in rectangles]
     x1 = min([c[0] for c in corners])
     y1 = min([c[1] for c in corners])
@@ -166,6 +201,9 @@ def merge_rectangles(rectangles):
                 
 def cluster_rectangles(rectangles, eps):
     '''Combine rectangles within eps (pixels) of each other.'''
+    
+    raise NotImplementedError
+
     groupings = [-1] * len(rectangles)
     for i, rectangle in enumerate(rectangles):
         if groupings[i] == -1:

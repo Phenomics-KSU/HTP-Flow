@@ -64,7 +64,7 @@ class FieldItem(object):
         self.range = range_grid # The range the item is found in.  If row is the 'x' value then the range is the 'y' value and the units are dimensionless.
         self.image_path = image_path # Full path where cropped out image of field item is found.
         self.parent_image_filename = parent_image_filename  # Filename of image where field item was found. Don't store ref since we'll run out of memory.
-        self.bounding_rect = bounding_rect # OpenCV minimum bounding rectangle containing item. Units in pixels. No pad added in.
+        self.bounding_rect = bounding_rect # OpenCV minimum rotated bounding rectangle containing item. Units in pixels. No pad added in.
         self.number_within_field = number_within_field # Number of item within entire field.  
         self.number_within_row = number_within_row # Number of item within current row.  Measured from range = 0 side of field.
         self.other_items = [] # same field item from different images.

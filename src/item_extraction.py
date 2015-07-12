@@ -42,8 +42,7 @@ class ItemExtractor:
                 # Mark as special color to show user why it wasn't included.
                 if marked_image is not None:
                     dark_orange = (0, 140, 255) # dark orange
-                    x1, y1, x2, y2 = rectangle_corners(item.bounding_rect) 
-                    cv.rectangle(marked_image, (x1,y1), (x2,y2), dark_orange, 2)
+                    drawRect(marked_image, item.bounding_rect, dark_orange, thickness=2)
             else:
                 items_without_border_elements.append(item)
         field_items = items_without_border_elements
@@ -51,7 +50,7 @@ class ItemExtractor:
         # Extract field items into separate image
         for item in field_items:
             
-            extracted_image = extract_image(item.bounding_rect, 20, image)
+            extracted_image = extract_image(image, item.bounding_rect, 20)
             
             extracted_image_fname = "{0}_{1}.jpg".format(item.type, item.name)
             extracted_image_path = ImageWriter.save_normal(extracted_image_fname, extracted_image)
@@ -86,8 +85,8 @@ class QRLocator:
         #contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
         
         # Create bounding box for each contour.
-        bounding_rectangles = [cv.boundingRect(contour) for contour in contours]
-        
+        bounding_rectangles = [cv.minAreaRect(contour) for contour in contours]
+
         # Remove any rectangles that couldn't be a QR item based off specified side length.
         min_qr_size = self.qr_size * 0.3
         max_qr_size = self.qr_size * 2.5
@@ -101,7 +100,7 @@ class QRLocator:
         # Scan each rectangle with QR reader to remove false positives and also extract data from code.
         qr_items = []
         for rectangle in filtered_rectangles:
-            extracted_image = extract_image(rectangle, 30, image)
+            extracted_image = extract_image(image, rectangle, 30)
             qr_data = self.scan_image_multiple(extracted_image)
             scan_successful = len(qr_data) != 0
 
@@ -121,8 +120,7 @@ class QRLocator:
                     success_color = (0, 255, 255) # yellow for row codes
                 failure_color = (0, 0, 255) # red
                 item_color = success_color if scan_successful else failure_color
-                x,y,w,h = rectangle
-                cv.rectangle(marked_image, (x,y), (x+w,y+h), item_color, 2) 
+                drawRect(marked_image, rectangle, item_color, thickness=2)
         
         return qr_items
     
@@ -221,13 +219,12 @@ class PlantLocator:
             #contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
             
             # Create bounding box for each contour.
-            bounding_rectangles = [cv.boundingRect(contour) for contour in contours]
+            bounding_rectangles = [cv.minAreaRect(contour) for contour in contours]
             
             if marked_image is not None:
                 for rectangle in bounding_rectangles:
-                    # Show rectangles using colored bounding box.
-                    x,y,w,h = rectangle
-                    cv.rectangle(marked_image, (x,y), (x+w,y+h), (0,0,0), 2) 
+                    # Show rectangles using bounding box.
+                    drawRect(marked_image, rectangle, (0,0,0), thickness=2)
             
             # Remove any rectangles that couldn't be a plant based off specified size.
             filtered_rectangles.extend(filter_by_size(bounding_rectangles, geo_image.resolution, self.min_plant_size, self.max_plant_size, enforce_min_on_w_and_h=False))
@@ -241,8 +238,7 @@ class PlantLocator:
             for rectangle in filtered_rectangles:
                 # Show rectangles using colored bounding box.
                 purple = (255, 0, 255)
-                x,y,w,h = rectangle
-                cv.rectangle(marked_image, (x,y), (x+w,y+h), purple, 2) 
+                drawRect(marked_image, rectangle, purple, thickness=2)
         
         # Now go through and cluster plants (leaves) that are close together.
         max_distance = 20 # centimeters
@@ -258,8 +254,7 @@ class PlantLocator:
             if marked_image is not None:
                 # Show successful plants using colored bounding box.
                 blue = (255, 0, 0)
-                x,y,w,h = rectangle
-                cv.rectangle(marked_image, (x,y), (x+w,y+h), blue, 2) 
+                drawRect(marked_image, rectangle, blue, thickness=2)
         
         return plants
 
@@ -268,8 +263,8 @@ def filter_by_size(bounding_rects, resolution, min_size, max_size, enforce_min_o
     filtered_rects = []
     
     for rectangle in bounding_rects:    
-        #w_pixels, h_pixels = rectangle[1]
-        _, _, w_pixels, h_pixels = rectangle
+        center, dim, theta = rectangle
+        w_pixels, h_pixels = dim
         
         w = w_pixels * resolution
         h = h_pixels * resolution
@@ -286,11 +281,12 @@ def filter_by_size(bounding_rects, resolution, min_size, max_size, enforce_min_o
             
     return filtered_rects
 
-def extract_image(rectangle, pad, image):
+def extract_image(image, rectangle, pad, rotated=True):
     '''Return image that corresponds to bounding rectangle with pad added in.'''
     # reference properties of bounding rectangle
-    #x, y = rectangle[0]
-    #w, h = rectangle[1]
+    if rotated:
+        rectangle = rotatedToRegularRect(rectangle)
+
     x, y, w, h = rectangle
     
     # image width, height and depth
@@ -326,14 +322,11 @@ def calculate_position(item, geo_image):
     
 def create_qr_code(qr_data, bounding_rect):
     '''Return either GroupCode or RowCode depending on qr data.  Return None if neither.'''
-    # We have the most QR group codes so try to create one first.
-    qr_item = GroupCode(name = qr_data)
-    if qr_item.entry.isdigit() and len(qr_item.rep) == 1:
-        pass # put any special setup code for group code here.
+    if qr_data[:2] == 'R.' and qr_data[2:].isdigit():
+        qr_item = RowCode(name = qr_data)
     else:
-        # Wasn't a group code so check if it's a row code.
-        if qr_data[:2] == 'R.' and qr_data[2:].isdigit():
-            qr_item = RowCode(name = qr_data)
+        if qr_data.isdigit():
+            qr_item = GroupCode(name = qr_data)
         else:
             # Wasn't a recognized code.
             return None

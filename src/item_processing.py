@@ -83,9 +83,12 @@ def merge_items(items, max_distance):
             
     return unique_items
 
-def touches_image_border(item, geo_image):
+def touches_image_border(item, geo_image, rotated_bounding_box=True):
     '''Return true if item bounding box touches image border.'''
-    x1, y1, x2, y2 = rectangle_corners(item.bounding_rect)
+    rect = item.bounding_rect
+    if rotated_bounding_box:
+        rect = rotatedToRegularRect(item.bounding_rect)
+    x1, y1, x2, y2 = rectangle_corners(rect, rotated=False)
     img_w, img_h = geo_image.size
     # Need to use (1 and -1) since bounding box has 1 pix border.
     touches_border = x1 <= 1 or y1 <= 1 or x2 >= (img_w-1) or y2 >= (img_h-1)
@@ -219,9 +222,9 @@ def export_results(items, out_filepath):
                'Type',
                'Entry',
                'Rep',
-               'Num Within Field',
-               'Num Within Row',
-               'Num Within Group',
+               'Field#',
+               'Row#',
+               'Group#',
                'Row',
                'Range',
                'Easting',
