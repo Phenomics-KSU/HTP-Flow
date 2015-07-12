@@ -121,5 +121,8 @@ if __name__ == '__main__':
     # Display QR code stats for user.
     all_codes = all_items(geo_images)
     merged_codes = merge_items(all_codes, max_distance=100)
-    print "There were {} codes found and {} were unique.  Average code is in {} images.".format(len(all_codes), len(merged_codes), float(len(all_codes)) / len(merged_codes))
-    print "Merged codes not being saved.  Just for user information."
+    if len(merged_codes) == 0:
+        print "No codes found."
+    else:
+        print "There were {} codes found and {} were unique.  Average code is in {} images.".format(len(all_codes), len(merged_codes), float(len(all_codes)) / len(merged_codes))
+        print "Merged codes not being saved.  Just for user information."
