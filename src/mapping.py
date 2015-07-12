@@ -7,7 +7,7 @@ from collections import Counter
 import copy
 
 # OpenCV imports
-import cv2 as cv
+import cv2
 import numpy as np
 
 # Project imports

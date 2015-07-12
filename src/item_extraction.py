@@ -5,7 +5,7 @@ from operator import itemgetter, attrgetter, methodcaller
 import math
 
 # OpenCV imports
-import cv2 as cv
+import cv2
 import numpy as np
 
 # Zbar imports
@@ -28,7 +28,7 @@ class ItemExtractor:
         if marked_image is not None:
             # Show what 1" is on the top-left of the image.
             pixels = int(2.54 / geo_image.resolution)
-            cv.rectangle(marked_image, (1,1), (pixels, pixels), (255,255,255), 2) 
+            cv2.rectangle(marked_image, (1,1), (pixels, pixels), (255,255,255), 2) 
     
         field_items = []
         for locator in self.locators:
@@ -50,7 +50,7 @@ class ItemExtractor:
         # Extract field items into separate image
         for item in field_items:
             
-            extracted_image = extract_image(image, item.bounding_rect, 20)
+            extracted_image = extract_square_image(image, item.bounding_rect, 20)
             
             extracted_image_fname = "{0}_{1}.jpg".format(item.type, item.name)
             extracted_image_path = ImageWriter.save_normal(extracted_image_fname, extracted_image)
@@ -72,20 +72,20 @@ class QRLocator:
     def locate(self, geo_image, image, marked_image):
         '''Find QR codes in image and decode them.  Return list of FieldItems representing valid QR codes.''' 
         # Threshold grayscaled image to make white QR codes stands out.
-        gray_image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-        _, thresh_image = cv.threshold(gray_image, 140, 255, 0)
+        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        _, thresh_image = cv2.threshold(gray_image, 140, 255, 0)
         
         # Open mask (to remove noise) and then dilate it to connect contours.
         kernel = np.ones((5,5), np.uint8)
-        mask_open = cv.morphologyEx(thresh_image, cv.MORPH_OPEN, kernel)
-        thresh_image = cv.dilate(mask_open, kernel, iterations = 1)
+        mask_open = cv2.morphologyEx(thresh_image, cv2.MORPH_OPEN, kernel)
+        thresh_image = cv2.dilate(mask_open, kernel, iterations = 1)
         
         # Find outer contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
-        contours, hierarchy = cv.findContours(thresh_image.copy(), cv.cv.CV_RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-        #contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
+        contours, hierarchy = cv2.findContours(thresh_image.copy(), cv2.cv.CV_RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        #contours = [cv2.approxPolyDP(contour, .1, True) for contour in contours]
         
         # Create bounding box for each contour.
-        bounding_rectangles = [cv.minAreaRect(contour) for contour in contours]
+        bounding_rectangles = [cv2.minAreaRect(contour) for contour in contours]
 
         # Remove any rectangles that couldn't be a QR item based off specified side length.
         min_qr_size = self.qr_size * 0.3
@@ -100,8 +100,7 @@ class QRLocator:
         # Scan each rectangle with QR reader to remove false positives and also extract data from code.
         qr_items = []
         for rectangle in filtered_rectangles:
-            extracted_image = extract_image(image, rectangle, 30)
-            qr_data = self.scan_image_multiple(extracted_image)
+            qr_data = self.scan_image_different_trims_and_threshs(image, rectangle, trims=[0, 3, 8, 12, 16])
             scan_successful = len(qr_data) != 0
 
             if scan_successful:
@@ -124,7 +123,20 @@ class QRLocator:
         
         return qr_items
     
-    def scan_image_multiple(self, cv_image):
+    def scan_image_different_trims_and_threshs(self, full_image, rotated_rect, trims):
+        '''Scan image using different trims if first try fails. Return list of data found in image.'''
+        
+        for i, trim in enumerate(trims):
+            extracted_image = extract_rotated_image(full_image, rotated_rect, 30, trim=trim)
+            qr_data = self.scan_image_different_threshs(extracted_image)
+            if len(qr_data) != 0:
+                if i > 0:
+                    print "Success with trim value {} on try {}".format(trim, i+1)
+                return qr_data # scan successful
+            
+        return [] # scans unsuccessful.
+    
+    def scan_image_different_threshs(self, cv_image):
         '''Scan image using multiple thresholds if first try fails. Return list of data found in image.'''
         scan_try = 0
         qr_data = []
@@ -132,13 +144,13 @@ class QRLocator:
             if scan_try == 0:
                 image_to_scan = cv_image # use original image
             elif scan_try == 1:
-                cv_gray_image = cv.cvtColor(cv_image, cv.COLOR_BGR2GRAY)
-                cv_thresh_image = cv.adaptiveThreshold(cv_gray_image, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY, 101, 2)
-                image_to_scan = cv.cvtColor(cv_thresh_image, cv.COLOR_GRAY2BGR)
+                cv_gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+                cv_thresh_image = cv2.adaptiveThreshold(cv_gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 101, 2)
+                image_to_scan = cv2.cvtColor(cv_thresh_image, cv2.COLOR_GRAY2BGR)
             elif scan_try == 2:
-                cv_gray_image = cv.cvtColor(cv_image, cv.COLOR_BGR2GRAY)
-                _, cv_thresh_image = cv.threshold(cv_gray_image, 150, 255, 0)
-                image_to_scan = cv.cvtColor(cv_thresh_image, cv.COLOR_GRAY2BGR)
+                cv_gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+                _, cv_thresh_image = cv2.threshold(cv_gray_image, 150, 255, 0)
+                image_to_scan = cv2.cvtColor(cv_thresh_image, cv2.COLOR_GRAY2BGR)
             else:
                 break # nothing else to try.
             
@@ -162,7 +174,7 @@ class QRLocator:
         scanner.parse_config('enable')
          
         # Convert colored OpenCV image to grayscale PIL image.
-        cv_image = cv.cvtColor(cv_image, cv.COLOR_BGR2RGB)
+        cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
         pil_image= Image.fromarray(cv_image)
         pil_image = pil_image.convert('L') # convert to grayscale
 
@@ -186,40 +198,40 @@ class PlantLocator:
     def locate(self, geo_image, image, marked_image):
         '''Find plants in image and return list of Plant instances.''' 
         # Grayscale original image so we can find edges in it. Default for OpenCV is BGR not RGB.
-        #blue_channel, green_channel, red_channel = cv.split(image)
+        #blue_channel, green_channel, red_channel = cv2.split(image)
         
         # Convert Blue-Green-Red color space to HSV
-        hsv_image = cv.cvtColor(image, cv.COLOR_BGR2HSV)
+        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
             
         # Threshold the HSV image to get only green colors that correspond to healthy plants.
         green_hue = 60
         lower_green = np.array([green_hue - 30, 90, 50], np.uint8)
         upper_green = np.array([green_hue + 30, 255, 255], np.uint8)
-        plant_mask = cv.inRange(hsv_image, lower_green, upper_green)
+        plant_mask = cv2.inRange(hsv_image, lower_green, upper_green)
         
       # Now do the same thing for greenish dead plants.
         lower_dead_green = np.array([10, 35, 60], np.uint8)
         upper_dead_green = np.array([90, 255, 255], np.uint8)
-        dead_green_plant_mask = cv.inRange(hsv_image, lower_dead_green, upper_dead_green)
+        dead_green_plant_mask = cv2.inRange(hsv_image, lower_dead_green, upper_dead_green)
     
         # Now do the same thing for yellowish dead plants.
         #lower_yellow = np.array([10, 50, 125], np.uint8)
         #upper_yellow = np.array([40, 255, 255], np.uint8)
-        #dead_yellow_plant_mask = cv.inRange(hsv_image, lower_yellow, upper_yellow)
+        #dead_yellow_plant_mask = cv2.inRange(hsv_image, lower_yellow, upper_yellow)
         
         filtered_rectangles = []
         for i, mask in enumerate([plant_mask, dead_green_plant_mask]):
             # Open mask (to remove noise) and then dilate it to connect contours.
             kernel = np.ones((5,5), np.uint8)
-            mask_open = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel)
-            mask = cv.dilate(mask_open, kernel, iterations = 1)
+            mask_open = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+            mask = cv2.dilate(mask_open, kernel, iterations = 1)
             
             # Find outer contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
-            contours, hierarchy = cv.findContours(mask.copy(), cv.cv.CV_RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
-            #contours = [cv.approxPolyDP(contour, .1, True) for contour in contours]
+            contours, hierarchy = cv2.findContours(mask.copy(), cv2.cv.CV_RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            #contours = [cv2.approxPolyDP(contour, .1, True) for contour in contours]
             
             # Create bounding box for each contour.
-            bounding_rectangles = [cv.minAreaRect(contour) for contour in contours]
+            bounding_rectangles = [cv2.minAreaRect(contour) for contour in contours]
             
             if marked_image is not None:
                 for rectangle in bounding_rectangles:
@@ -281,8 +293,9 @@ def filter_by_size(bounding_rects, resolution, min_size, max_size, enforce_min_o
             
     return filtered_rects
 
-def extract_image(image, rectangle, pad, rotated=True):
-    '''Return image that corresponds to bounding rectangle with pad added in.'''
+def extract_square_image(image, rectangle, pad, rotated=True):
+    '''Return image that corresponds to bounding rectangle with pad added in.
+       If rectangle is rotated then it is converted to a normal non-rotated rectangle.'''
     # reference properties of bounding rectangle
     if rotated:
         rectangle = rotatedToRegularRect(rectangle)
@@ -299,6 +312,43 @@ def extract_image(image, rectangle, pad, rotated=True):
     right = int(min(image_w - 1, x + w + pad))
 
     return image[top:bottom, left:right]
+    
+def extract_rotated_image(image, rotated_rect, pad, trim=0):
+    '''Return image that corresponds to bounding rectangle with a white pad background added in.'''
+    center, dim, theta = rotated_rect
+    width, height = dim
+    trimmed_rect = (center, (width-trim, height-trim), theta)
+    center, dim, theta = trimmed_rect
+    width, height = dim
+
+    rect_corners = rectangle_corners(trimmed_rect, rotated=True)
+    poly = np.array([rect_corners], dtype=np.int32)
+    mask = np.zeros((image.shape[0],image.shape[1],1), np.uint8)
+    cv2.fillPoly(mask, poly, 255)
+    masked_image = cv2.bitwise_and(image, image, mask=mask)
+    
+    inverted_mask = cv2.bitwise_not(mask, mask)
+    masked_image = cv2.bitwise_not(masked_image, masked_image, mask=inverted_mask)
+    
+    return extract_square_image(masked_image, trimmed_rect, pad, rotated=True)
+
+def rotate_about_center(src, angle, scale=1.):
+    w = src.shape[1]
+    h = src.shape[0]
+    rangle = np.deg2rad(angle)  # angle in radians
+    # now calculate new image width and height
+    nw = (abs(np.sin(rangle)*h) + abs(np.cos(rangle)*w))*scale
+    nh = (abs(np.cos(rangle)*h) + abs(np.sin(rangle)*w))*scale
+    # ask OpenCV for the rotation matrix
+    rot_mat = cv2.getRotationMatrix2D((nw*0.5, nh*0.5), angle, scale)
+    # calculate the move from the old center to the new center combined
+    # with the rotation
+    rot_move = np.dot(rot_mat, np.array([(nw-w)*0.5, (nh-h)*0.5,0]))
+    # the move only affects the translation, so update the translation
+    # part of the transform
+    rot_mat[0,2] += rot_move[0]
+    rot_mat[1,2] += rot_move[1]
+    return cv2.warpAffine(src, rot_mat, (int(math.ceil(nw)), int(math.ceil(nh))), flags=cv2.INTER_LANCZOS4)
     
 def calculate_position(item, geo_image):
     '''Return (x,y,z) position of item within geo image.'''

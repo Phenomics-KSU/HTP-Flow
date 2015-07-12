@@ -5,7 +5,7 @@ import os
 import math
 
 # OpenCV imports
-import cv2 as cv
+import cv2
 import numpy as np
 
 # Project imports
@@ -37,7 +37,7 @@ class ImageWriter(object):
         if not os.path.exists(os.path.dirname(filepath)):
             os.makedirs(os.path.dirname(filepath))
             
-        cv.imwrite(filepath, image)
+        cv2.imwrite(filepath, image)
         
         return filepath
 
@@ -141,12 +141,12 @@ def index_containing_substring(the_list, substring):
 def drawRect(img, rect, color=(0,0,0), thickness=1, rotated=True):
     '''Draws the rotated rectangle on the specified image.'''
     if rotated:
-        box = cv.cv.BoxPoints(rect)
+        box = cv2.cv.BoxPoints(rect)
         box = np.int0(box)
-        cv.drawContours(img, [box], 0, color, thickness)
+        cv2.drawContours(img, [box], 0, color, thickness)
     else:
         corners = rectangle_corners(rect, rotate=False)
-        cv.rectangle(img, corners[0], corners[1], color, thickness) 
+        cv2.rectangle(img, corners[0], corners[1], color, thickness) 
 
 def rectangle_center(rectangle, rotated=True):
     '''Returns (x,y) tuple of center of rectangle.'''
@@ -161,7 +161,7 @@ def rectangle_corners(rectangle, rotated=True):
     '''If non-rotated then returns top left (x1, y1) and bottom right (x2, y2) corners as flat tuple.
        If rotated then uses BoxPoints to get tuple of 4 corners.'''
     if rotated:
-        return cv.cv.BoxPoints(rectangle)
+        return cv2.cv.BoxPoints(rectangle)
     else:
         x, y, w, h = rectangle
         return (x, y, x+w, y+h)

@@ -8,7 +8,7 @@ import copy
 import pickle
 
 # OpenCV imports
-import cv2 as cv
+import cv2
 import numpy as np
 
 # Project imports

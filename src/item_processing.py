@@ -11,7 +11,7 @@ def process_geo_image(geo_image, item_extractor, camera_rotation, image_director
     '''Return list of extracted items sorted in direction of movement.'''
     full_filename = os.path.join(image_directory, geo_image.file_name)
     
-    image = cv.imread(full_filename, cv.CV_LOAD_IMAGE_COLOR)
+    image = cv2.imread(full_filename, cv2.CV_LOAD_IMAGE_COLOR)
     
     if image is None:
         print 'Cannot open image: {0}'.format(full_filename)
@@ -41,7 +41,7 @@ def process_geo_image(geo_image, item_extractor, camera_rotation, image_director
     if marked_image is not None:
         marked_image_filename = postfix_filename(geo_image.file_name, '_marked')
         marked_image_path = os.path.join(out_directory, marked_image_filename)
-        cv.imwrite(marked_image_path, marked_image)
+        cv2.imwrite(marked_image_path, marked_image)
         
     return image_items
 
