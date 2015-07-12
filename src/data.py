@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from item_processing import position_difference
+from math import sqrt
 
 class GeoImage(object):
     '''Image properties with X,Y,Z position and heading. All distances in centimeters.'''
@@ -149,7 +149,9 @@ class PlantGroupSegment(object):
         '''Return distance between start and end code in centimeters.'''
         if self.start_code is None or self.end_code is None:
             return 0
-        return position_difference(self.start_code.position, self.end_code.position)
+        delta_x = self.start_code.position[0] - self.end_code.position[0]
+        delta_y = self.start_code.position[1] - self.end_code.position[1]
+        return sqrt(delta_x*delta_x + delta_y*delta_y)
         
 class PlantGroup(object):
     '''Complete plant grouping made of 1 or more segments that span multiple rows.'''
