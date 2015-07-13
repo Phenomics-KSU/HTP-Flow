@@ -35,17 +35,17 @@ if __name__ == '__main__':
     
     # Parse in group info
     grouping_info = parse_grouping_file(group_info_file)
-    print "Parsed {0} groups. ".format(len(grouping_info))
+    print "Parsed {} groups. ".format(len(grouping_info))
     
     # Warn if there are duplicate groups in info file.
     grouping_info_ids = [g[0] for g in grouping_info]
     for id, count in Counter(grouping_info_ids).most_common():
         if count > 1:
             print "ERROR: found {} groups with id {} in {}".format(count, id, group_info_file)
-            sys.exit(1)
-
+            #sys.exit(1)
+    
     # Unpickle geo images.
-    stage1_filenames = [f for f in os.listdir(input_directory) if os.path.isfile(f)]
+    stage1_filenames = [f for f in os.listdir(input_directory) if os.path.isfile(os.path.join(input_directory, f))]
     geo_images = []
     for stage1_filename in stage1_filenames:
         stage1_filepath = os.path.join(input_directory, stage1_filename)
@@ -62,17 +62,17 @@ if __name__ == '__main__':
     for geo_image in geo_images:
         all_codes += [item for item in geo_image.items if 'code' in item.type.lower()]
     
-    print 'Found {] codes in {} geo images.'.format(len(all_codes), len(geo_images))
+    print 'Found {} codes in {} geo images.'.format(len(all_codes), len(geo_images))
     
     if len(all_codes) == 0:
         sys.exit(1)
     
     # Merge items down so they're unique.  One code with reference other instances of that same code.
-    codes = merge_items(all_codes, max_distance=100)
+    merged_codes = merge_items(all_codes, max_distance=100)
     
     # Sanity check that multiple references of the same code are all close to each other.
     largest_separation = 0
-    for code in codes:
+    for code in merged_codes:
         code_combos = itertools.combinations([code] + code.other_items, 2)
         for (code1, code2) in code_combos:
             separation = position_difference(code1.position, code2.position)
@@ -81,8 +81,8 @@ if __name__ == '__main__':
                 
     print "Largest separation between same instances of any code is {} centimeters".format(largest_separation * 100.0)
     
-    row_codes = [code for code in codes if code.type.lower() == 'rowcode']
-    group_codes = [code for code in codes if code.type.lower() == 'groupcode']
+    row_codes = [code for code in merged_codes if code.type.lower() == 'rowcode']
+    group_codes = [code for code in merged_codes if code.type.lower() == 'groupcode']
     
     # Tell user how many codes are missing or if there are any extra codes.
     found_code_ids = [code.name for code in group_codes] 
@@ -103,29 +103,50 @@ if __name__ == '__main__':
     # Group row codes by row number.
     grouped_row_codes = defaultdict(list)
     for code in row_codes:
-        grouped_row_codes[code.number].append(code)
+        grouped_row_codes[code.row_number].append(code)
 
     # Show user information about which rows were found and which are missing.
     sorted_row_numbers = sorted(grouped_row_codes.keys())
     smallest_row_number = sorted_row_numbers[0]
     biggest_row_number = sorted_row_numbers[-1]
     print "Found rows from {} to {}".format(smallest_row_number, biggest_row_number)
-    missing_row_numbers = range(smallest_row_number, biggest_row_number+1) - sorted_row_numbers
+    missing_row_numbers = set(range(smallest_row_number, biggest_row_number+1)) - set(sorted_row_numbers)
     if len(missing_row_numbers) > 0:
         print "Missing row numbers {}".format(missing_row_numbers)
     else:
         print "No skipped row numbers."
     
     rows = []
-    for row_number, codes in grouped_row_codes:
+    for row_number, codes in grouped_row_codes.iteritems():
         if len(codes) == 1:
             print "Only found 1 code for row {}".format(row_number)
         elif len(codes) > 2:
             print "Found {} codes for row {}".format(len(codes), row_number)
         else:
             # Create row objects with start/end codes.
-            start_code, end_code = order_row_codes(codes, field_direction)
-            rows.append(Row(start_code, end_code))
+            pass
+            #start_code, end_code = order_row_codes(codes, field_direction)
+            #rows.append(Row(start_code, end_code))
+            
+    # Write averaged results out to file.
+    avg_results_filename = time.strftime("_results_averaged-%Y%m%d-%H%M%S.csv")
+    avg_results_filepath = os.path.join(output_directory, avg_results_filename)
+    avg_output_items = []
+    for item in merged_codes:
+        avg_item = item # copy.copy(item)
+        item_references = [avg_item] + avg_item.other_items
+        avg_x = np.mean([item.position[0] for item in item_references])
+        avg_y = np.mean([item.position[1] for item in item_references])
+        avg_z = np.mean([item.position[2] for item in item_references])
+        avg_item.position = (avg_x, avg_y, avg_z)
+        avg_item.area = np.mean([item.area for item in item_references])
+        avg_width = np.mean([item.size[0] for item in item_references])
+        avg_height = np.mean([item.size[1] for item in item_references])
+        avg_item.size = (avg_width, avg_height)
+        avg_output_items.append(avg_item)
+    print 'Output averaged {} items'.format(len(avg_output_items))
+    export_results(avg_output_items, avg_results_filepath)
+    print "Exported averaged results to " + avg_results_filepath
             
     # Take into account how the row runs (up or back)
     

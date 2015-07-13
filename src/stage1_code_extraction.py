@@ -103,7 +103,7 @@ if __name__ == '__main__':
     qr_locator = QRLocator(qr_size)
     item_extractor = ItemExtractor([qr_locator])
     
-    ImageWriter.level = ImageWriter.DEBUG
+    ImageWriter.level = ImageWriter.NORMAL
 
     # Extract all QR items from images.
     for i, geo_image in enumerate(geo_images):

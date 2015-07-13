@@ -73,7 +73,7 @@ class QRLocator:
         '''Find QR codes in image and decode them.  Return list of FieldItems representing valid QR codes.''' 
         # Threshold grayscaled image to make white QR codes stands out.
         gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        _, thresh_image = cv2.threshold(gray_image, 140, 255, 0)
+        _, thresh_image = cv2.threshold(gray_image, 150, 255, 0)
         
         # Open mask (to remove noise) and then dilate it to connect contours.
         kernel = np.ones((5,5), np.uint8)
