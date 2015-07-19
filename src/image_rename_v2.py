@@ -63,7 +63,11 @@ if __name__ == '__main__':
         
         # Extract camera serial number and capture date/time from EXIF metadata so we can use it for renaming image.
         with open(filepath, 'rb') as f:
-            img = Image.open(f)
+            try:
+                img = Image.open(f)
+            except IOError as e:
+                print "Cannot open image {}. Exception {}".format(filepath, e)
+                continue # to next time
             exif = img._getexif()
             cam_serial_number = exif[42033]
             datetime_original = exif[36867]
