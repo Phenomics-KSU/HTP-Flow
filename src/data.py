@@ -52,12 +52,12 @@ class Row(object):
 
 class FieldItem(object):
     '''Item found within image'''
-    def __init__(self, name, position=(0,0,0), size=(0,0), area=0, row=0, range_grid=0,
-                  image_path='', parent_image_filename='', bounding_rect=None, 
-                  number_within_field=0, number_within_row=0):
+    def __init__(self, name, position=(0,0,0), field_position=(0,0,0), size=(0,0), area=0, row=0, range_grid=0,
+                  image_path='', parent_image_filename='', bounding_rect=None, number_within_field=0, number_within_row=0):
         '''Constructor.'''
         self.name = name # identifier 
-        self.position = position # 3D position of camera in either local ENU frame or UTM when the image was taken.
+        self.position = position # 3D position of item in either local ENU frame or UTM
+        self.field_position = field_position # 3D position relative to first field item. axes are in direction of row, range, altitude.
         self.size = size # Width and height of item in centimeters.
         self.area = area # Area of item in cm^2
         self.row = row # The row the item is found in. First row is #1.  If zero or negative then doesn't belong to a row.

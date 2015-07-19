@@ -213,13 +213,75 @@ def is_same_item(item1, item2, max_position_difference):
         return False # Too far apart
     
     return True # Similar enough
+
+def cap_angle_plus_minus_180_deg(angle):
+    '''Return angle in range of (-180, 180]'''
+    while angle <= -180.0:
+        angle += 360.0
+    while angle > 180.0:
+        angle -= 360.0 
         
+def compare_angles(angle1, angle2, thresh):
+    '''Return true if angle1 is within thresh degrees of angle2.  Everything in degrees.'''
+    diff = angle1 - angle2
+    diff = cap_angle_plus_minus_180_deg(diff)
+    return abs(diff) < thresh
+
+def orient_items(item1, item2, direction, thresh=45):
+    '''Return item 1 and 2 as start_item , end_item specified by direction given in degrees.'''
+    p1 = item1.position
+    p2 = item2.position
+    # Calculate angle from item1 to item2
+    dx = p2[0] - p1[0]
+    dy = p2[1] - p1[1]
+    angle =  math.atan2(dy, dx)
+    if compare_angles(angle, direction, thresh):
+        # item1 is the start item
+        return item1, item2
+    elif compare_angles(angle, -direction, thresh):
+        # item2 is the start item
+        return item2, item1
+    else:
+        print "Can't orient items with names {} and {}.  Angle {} is not within {} degrees of specified direction {}".format(item1.name, item2.name, angle, thresh, direction)
+        return None, None
+    
+def lateral_and_projection_distance_2d(p, a, b):
+    '''Return lateral error from position (p) to vector from points (a) to (b).'''
+    a_to_b = (b[0] - a[0], b[1] - a[1])
+    a_to_b_mag = sqrt(a_to_b[0]*a_to_b[0] + a_to_b[1]*a_to_b[1])
+    
+    if a_to_b_mag == 0.0:
+        print "Warning: Vector from point a to b has zero magnitude. Returning NaN."
+        return float('NaN')
+    
+    # Calculate position vector from a to p.
+    a_to_p = (p[0] - a[0], p[1] - a[1])
+
+    # Project a_to_p position vector onto a_to_b vector.
+    a_to_b_traveled_mag = (a_to_p[0]*a_to_b[0] + a_to_p[1]*a_to_b[1]) / a_to_b_mag
+    a_to_b_traveled = [0, 0]
+    a_to_b_traveled[0] = a_to_b[0] * a_to_b_traveled_mag / a_to_b_mag
+    a_to_b_traveled[1] = a_to_b[1] * a_to_b_traveled_mag / a_to_b_mag
+    
+    dx = a_to_p[0] - a_to_b_traveled[0]
+    dy = a_to_p[1] - a_to_b_traveled[1]
+    lateral_error_magnitude = sqrt(dx * dx + dy * dy)
+    
+    # Use cross product between path and position vector to find correct sign of lateral error.
+    path_cross_position_z = a_to_b[0]*a_to_p[1] - a_to_b[1]*a_to_p[0]
+    lateral_error_sign =  -1.0 if path_cross_position_z < 0.0 else 1.0
+    
+    lateral_error = lateral_error_sign * lateral_error_magnitude
+    
+    return lateral_error, a_to_b_traveled_mag
+ 
 def export_results(items, out_filepath):
     '''Write all items to results file.'''
     with open(out_filepath, 'w') as out_file:
         # Write out header
         out_file.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(
                'Type',
+               'Name',
                'Entry',
                'Rep',
                'Field#',
@@ -245,8 +307,9 @@ def export_results(items, out_filepath):
             rep = item.group.rep if has_group else ''
             number_within_group = item.number_within_group if has_group else -1
             
-            out_file.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(
+            out_file.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(
                            item.type,
+                           item.name,
                            entry,
                            rep,
                            'TODO', # num within field

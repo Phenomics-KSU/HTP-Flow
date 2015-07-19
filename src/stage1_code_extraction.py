@@ -90,7 +90,7 @@ if __name__ == '__main__':
         stop_geo_index = len(geo_images) - 1
         
     print "Processing geo images {} through {}".format(start_geo_index, stop_geo_index)
-    geo_images = geo_images[start_geo_index+1 : stop_geo_index+1]
+    geo_images = geo_images[start_geo_index : stop_geo_index+1]
         
     print "Sorting images by timestamp."
     geo_images = sorted(geo_images, key=lambda image: image.image_time)
@@ -120,7 +120,7 @@ if __name__ == '__main__':
 
     # Display QR code stats for user.
     all_codes = all_items(geo_images)
-    merged_codes = merge_items(all_codes, max_distance=100)
+    merged_codes = merge_items(all_codes, max_distance=500)
     if len(merged_codes) == 0:
         print "No codes found."
     else:
