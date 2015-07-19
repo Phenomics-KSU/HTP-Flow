@@ -300,7 +300,7 @@ if __name__ == '__main__':
         geo_filepath = os.path.join(output_directory, geo_filename)
         with open(geo_filepath, 'w') as geo_file:
             for reading in geo_readings:
-                geo_file.write('{},'.format(reading.time))
+                geo_file.write('{:.4f},'.format(reading.time))
                 for element in reading.data:
                     geo_file.write('{},'.format(element))
                 for element in reading.position:

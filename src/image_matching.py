@@ -96,7 +96,7 @@ if __name__ == '__main__':
                 filesystem_imagename = filesystem_image[1]
                 just_filesystem_imagename = os.path.splitext(filesystem_imagename)[0]
                 new_log_filename = just_filesystem_imagename + extension
-                matched_log_contents.append((utc_time, new_log_filename))
+                matched_log_contents.append(("{0:.4f}".format(utc_time), new_log_filename))
                 
                 break
             
