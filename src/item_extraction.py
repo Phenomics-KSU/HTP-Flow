@@ -73,7 +73,7 @@ class QRLocator:
         '''Find QR codes in image and decode them.  Return list of FieldItems representing valid QR codes.''' 
         # Threshold grayscaled image to make white QR codes stands out.
         gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        _, thresh_image = cv2.threshold(gray_image, 150, 255, 0)
+        _, thresh_image = cv2.threshold(gray_image, 160, 255, 0)
         
         # Open mask (to remove noise) and then dilate it to connect contours.
         kernel = np.ones((5,5), np.uint8)
@@ -88,8 +88,8 @@ class QRLocator:
         bounding_rectangles = [cv2.minAreaRect(contour) for contour in contours]
 
         # Remove any rectangles that couldn't be a QR item based off specified side length.
-        min_qr_size = self.qr_size * 0.3
-        max_qr_size = self.qr_size * 2.5
+        min_qr_size = self.qr_size * 0.6
+        max_qr_size = self.qr_size * 4 # set large in case stuff under code
         filtered_rectangles = filter_by_size(bounding_rectangles, geo_image.resolution, min_qr_size, max_qr_size)
         
         if ImageWriter.level <= ImageWriter.DEBUG:

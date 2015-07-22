@@ -29,7 +29,7 @@ if __name__ == '__main__':
     parser.add_argument('-ch', dest='camera_height', default=0, help='camera height in centimeters. Must be > 0')
     parser.add_argument('-sw', dest='sensor_width', default=0, help='Sensor width in same units as focal length. Must be > 0')
     parser.add_argument('-fl', dest='focal_length', default=0, help='effective focal length in same units as sensor width. Must be > 0')
-    parser.add_argument('-mk', dest='marked_image', default=False, help='If true then will output marked up image.  Default false.')
+    parser.add_argument('-mk', dest='marked_image', default='false', help='If true then will output marked up image.  Default false.')
     parser.add_argument('-cr', dest='camera_rotation', default=0, help='Camera rotation (0, 90, 180, 270).  0 is camera top forward and increases counter-clockwise.' )
     parser.add_argument('-debug_start', dest='debug_start', default='__none__', help='Substring in image name to start processing at.')
     parser.add_argument('-debug_stop', dest='debug_stop', default='__none__', help='Substring in image name to stop processing at.')
@@ -45,7 +45,7 @@ if __name__ == '__main__':
     camera_height = float(args.camera_height)
     sensor_width = float(args.sensor_width)
     focal_length = float(args.focal_length)
-    use_marked_image = args.marked_image
+    use_marked_image = args.marked_image.lower() == 'true'
     camera_rotation = int(args.camera_rotation)
     debug_start = args.debug_start
     debug_stop = args.debug_stop
@@ -126,3 +126,6 @@ if __name__ == '__main__':
     else:
         print "There were {} codes found and {} were unique.  Average code is in {} images.".format(len(all_codes), len(merged_codes), float(len(all_codes)) / len(merged_codes))
         print "Merged codes not being saved.  Just for user information."
+        
+    #for code in all_codes:
+    #    print "{} {} {}".format(code.parent_image_filename, code.position[0], code.position[1])

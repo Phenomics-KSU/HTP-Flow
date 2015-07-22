@@ -41,7 +41,7 @@ class Row(object):
         self.start_code = start_code # QR code on the side of the field where range = 0
         self.end_code = end_code # QR code on the other side of the field.
         self.direction = direction # Either 'up' if the in same direction as field or 'back' if row runs opposite direction.
-        self.group_segments = segments # Segments in row in order from start code -> end code.  
+        self.group_segments = segments # Segments in row in order of direction (up or back)
         if self.group_segments is None:
             self.group_segments = []
     
@@ -119,6 +119,7 @@ class RowCode(FieldItem):
         '''Constructor.'''
         super(RowCode, self).__init__(*args, **kwargs)
         self.row_number = int(self.name[2:])
+        #self.row = self.row_number # TODO cleanup to avoid multiple references of the same thing
         
 class PlantGroupSegment(object):
     '''Part of a plant grouping. Hit end of row before entire grouping could be planted.'''
@@ -130,7 +131,7 @@ class PlantGroupSegment(object):
         self.group = None # group that segment belongs to.
         self.start_code = start_code # QR code to start segment. Could either be Row or Group Code depending on if segment is starting or ending.
         self.end_code = end_code # QR code that ends segment. Could either be Row or Group Code depending on if segment is starting or ending.
-    
+
     def update_group(self, new_group):
         '''Update the grouping that this segment belongs to and update the reference of all the items stored in the segment.'''
         self.group = new_group
@@ -144,7 +145,12 @@ class PlantGroupSegment(object):
         self.items.append(item)
         for new_item in [item] + item.other_items:
             new_item.group = self.group
-            
+    
+    @property
+    def row_number(self):
+        return self.start_code.row
+    
+    @property
     def length(self):
         '''Return distance between start and end code in centimeters.'''
         if self.start_code is None or self.end_code is None:
@@ -158,6 +164,7 @@ class PlantGroup(object):
     def __init__(self):
         '''Constructor.'''
         self.segments = []
+        self.expected_num_plants = -1 # how many plants should be in rows. negative if not sure.
 
     def add_segment(self, segment):
         segment.update_group(self)

@@ -80,8 +80,8 @@ def parse_geo_file(image_geo_file, provided_resolution, focal_length, camera_rot
                 heading = math.degrees(float(fields[7]))
                 # Make sure filename doesn't have extension, we'll add it from image that we're processing.
                 image_name = os.path.splitext(image_name)[0]
-            except (IndexError, ValueError):
-                print 'Bad line: {0}'.format(line) 
+            except (IndexError, ValueError) as e:
+                print 'Bad line: {}  Exception {}'.format(line, e) 
                 continue
 
             geo_image = GeoImage(image_name, image_time, (x, y, z), heading, provided_resolution, focal_length, camera_rotation, camera_height, sensor_width)
@@ -105,7 +105,7 @@ def parse_grouping_file(group_filename):
                 qr_id = fields[1]
                 flag = fields[2] # just entry x rep combined
                 entry = fields[3]
-                rep = fields[4]
+                rep = fields[4].upper()
                 estimated_num_plants = int(fields[5])
                 groups.append((qr_id, entry, rep, estimated_num_plants))
             except (IndexError, ValueError):

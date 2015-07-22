@@ -83,6 +83,62 @@ def merge_items(items, max_distance):
             
     return unique_items
 
+def cluster_merged_items(items, cluster_size):
+    
+    clustered_merged_items = []
+    for item in items:
+        clusters = []
+        item_refs = [item] + item.other_items
+        for item_ref in item_refs:
+            added_to_an_existing_cluster = False
+            for cluster in clusters:
+                for clustered_item in cluster:
+                    if position_difference(item_ref.position, clustered_item.position) < cluster_size:
+                        cluster.append(item_ref)
+                        added_to_an_existing_cluster = True
+                        break
+            if not added_to_an_existing_cluster:
+                # make a new cluster
+                clusters.append([item_ref])
+        
+        clusters = sorted(clusters, key=lambda c: len(c), reverse=True)
+        
+        if len(clusters) == 0:
+            continue 
+        
+        kept_cluster = []
+        if len(clusters) == 1:
+            kept_cluster = clusters[0]
+        elif len(clusters) > 1:
+            largest_cluster = clusters[0]
+            second_largest_cluster = clusters[1]
+            
+            if len(largest_cluster) > len(second_largest_cluster):
+                kept_cluster = largest_cluster
+            else:
+                #kept_cluster = largest_cluster
+                for cluster in clusters:
+                    kept_cluster += cluster # keep all clusters
+
+        main_item = kept_cluster[0]
+        main_item.other_items = []
+        for item in kept_cluster[1:]:
+            item.other_items = []
+            main_item.other_items.append(item)
+
+        clustered_merged_items.append(main_item)
+
+    return clustered_merged_items
+
+def average_position(item):
+    
+    item_references = [item] + item.other_items
+    avg_x = np.mean([it.position[0] for it in item_references])
+    avg_y = np.mean([it.position[1] for it in item_references])
+    avg_z = np.mean([it.position[2] for it in item_references])
+
+    return (avg_x, avg_y, avg_y)
+
 def touches_image_border(item, geo_image, rotated_bounding_box=True):
     '''Return true if item bounding box touches image border.'''
     rect = item.bounding_rect
@@ -160,6 +216,7 @@ def split_into_plant_groupings(rows):
                     
     return plant_groups
 
+
 def correct_plant_groupings(plant_groups, grouping_info):
     '''Correct plant groups to match specified grouping info.'''
     for group in plant_groups:
@@ -194,10 +251,10 @@ def is_same_item(item1, item2, max_position_difference):
     if item1.type != item2.type:
         return False
     
-    if item1.parent_image_filename == item2.parent_image_filename:
-        return False # Come from same image so can't be different.
+    if (item1.type.lower() != 'rowcode') and (item1.parent_image_filename == item2.parent_image_filename):
+        return False # Come from same image so can't be different... except there were duplicate row codes right next to each other.
     
-    if 'Code' in item1.type: 
+    if 'code' in item1.type.lower(): 
         if item1.name == item2.name:
             # Same QR code so give ourselves more room to work with.
             # Can't just say they're the same because row/start end could have same name.
@@ -219,7 +276,8 @@ def cap_angle_plus_minus_180_deg(angle):
     while angle <= -180.0:
         angle += 360.0
     while angle > 180.0:
-        angle -= 360.0 
+        angle -= 360.0
+    return angle
         
 def compare_angles(angle1, angle2, thresh):
     '''Return true if angle1 is within thresh degrees of angle2.  Everything in degrees.'''
@@ -234,7 +292,7 @@ def orient_items(item1, item2, direction, thresh=45):
     # Calculate angle from item1 to item2
     dx = p2[0] - p1[0]
     dy = p2[1] - p1[1]
-    angle =  math.atan2(dy, dx)
+    angle =  math.degrees(math.atan2(dy, dx))
     if compare_angles(angle, direction, thresh):
         # item1 is the start item
         return item1, item2
@@ -286,7 +344,6 @@ def export_results(items, out_filepath):
                'Rep',
                'Field#',
                'Row#',
-               'Group#',
                'Row',
                'Range',
                'Easting',
@@ -305,16 +362,14 @@ def export_results(items, out_filepath):
             
             entry = item.group.entry if has_group else ''
             rep = item.group.rep if has_group else ''
-            number_within_group = item.number_within_group if has_group else -1
-            
-            out_file.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(
+
+            out_file.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(
                            item.type,
                            item.name,
                            entry,
                            rep,
                            'TODO', # num within field
                            'TODO', # num within row
-                           number_within_group,
                            item.row,
                            item.range,
                            item.position[0],

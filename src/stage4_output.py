@@ -11,7 +11,7 @@ import numpy as np
 
 # Project imports
 from data import *
-from item_processing import export_results
+from item_processing import export_results, position_difference
 
 if __name__ == '__main__':
     '''Output results.'''
@@ -31,13 +31,57 @@ if __name__ == '__main__':
         rows = pickle.load(input_file)
         print 'Loaded {} rows from {}'.format(len(rows), input_filepath)
     
-    items = []
+    current_field_item_num = 1
+    ordered_items = []
     for row in rows:
-        for segment in row.group_segments:
+        items = []
+        for i, segment in enumerate(row.group_segments):
+            items.append(segment.start_code)
             items += segment.items
+            if i == len(row.group_segments) - 1:
+                items.append(segment.end_code) # since on last segment it won't show up in next segment
+                
+            # Get everything going in the 'up' direction
+            if row.direction == 'back':
+                items.reverse()
+            
+            # Reverse items in even row numbers for serpentine ordering    
+            if i % 2 == 0:
+                items.reverse()
+                
+            for item_num_in_row, item in enumerate(items):
+                item.number_within_field = current_field_item_num
+                item.number_within_row = item_num_in_row + 1 # index off 1 instead of 0
+                ordered_items.append(item)
+                current_field_item_num += 1
+                
+    items = ordered_items
     
+    first_group_code = None
+    for item in items:
+        if item.type.lower() == 'groupcode':
+            first_group_code = item
+            break
+        
+    if first_group_code is None:
+        print "No group codes. Exiting"
+        sys.exit(1)
+        
+    if first_group_code.name != '930':
+        print "First group code is {} and should be {}. Exiting".format(first_group_code.name, '930')
+        sys.exit(1)
+                
+    first_position = first_group_code.position
+    
+    for item in items:
+        rel_x = item.position[0] - first_position[0]
+        rel_y = item.position[1] - first_position[1]
+        rel_z = item.position[2] - first_position[2]
+        item.field_position = (rel_x, rel_y, rel_z)
+                
     print 'Found {} items in rows.'.format(len(items))
     
+    # Shouldn't be necessary, but do it anyway.
     print 'Sorting items by number within field.'
     items = sorted(items, key=lambda item: item.number_within_field)
     
@@ -57,13 +101,13 @@ if __name__ == '__main__':
     for item in items:
         avg_item = item # copy.copy(item)
         item_references = [avg_item] + avg_item.other_items
-        avg_x = np.mean([item.position[0] for item in item_references])
-        avg_y = np.mean([item.position[1] for item in item_references])
-        avg_z = np.mean([item.position[2] for item in item_references])
+        avg_x = np.mean([it.position[0] for it in item_references])
+        avg_y = np.mean([it.position[1] for it in item_references])
+        avg_z = np.mean([it.position[2] for it in item_references])
         avg_item.position = (avg_x, avg_y, avg_z)
-        avg_item.area = np.mean([item.area for item in item_references])
-        avg_width = np.mean([item.size[0] for item in item_references])
-        avg_height = np.mean([item.size[1] for item in item_references])
+        avg_item.area = np.mean([it.area for it in item_references])
+        avg_width = np.mean([it.size[0] for it in item_references])
+        avg_height = np.mean([it.size[1] for it in item_references])
         avg_item.size = (avg_width, avg_height)
         avg_output_items.append(avg_item)
     print 'Output averaged {} items'.format(len(avg_output_items))
