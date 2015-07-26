@@ -5,6 +5,7 @@ import os
 import argparse
 import pickle
 import itertools
+import copy
 from collections import Counter
 from collections import defaultdict
 
@@ -46,7 +47,7 @@ if __name__ == '__main__':
         if len(infos) > 2:
             print "More than 2 entries with id {}".format(id)
         elif len(infos) == 2:
-            if infos[0] == infos[1]:
+            if infos[0][:-1] == infos[1][:-1]:
                 print "Duplicate entries with id {}".format(id)
             else:
                 print "Two different entries with id {}".format(id)
@@ -368,6 +369,10 @@ if __name__ == '__main__':
         
         next_pass = field_passes[field_pass_index+1]
         
+        if len(next_pass) < 2:
+            print "Pass {} doesn't contain 2 rows".format(field_pass_index+1)
+            continue
+        
         next_pass_index = 0 # assume inside
         if pass_index == 0:
             next_pass_index = 1 # was actually outside
@@ -440,6 +445,14 @@ if __name__ == '__main__':
 
         if abs(length_difference) > max_length_difference:
             #print "For group {} the actual length of {} is {} meters off from expected length {}.".format(group.id, actual_length, length_difference, expected_length)
+            if length_difference > max_length_difference:
+                print "Group with start code {} ({}{}) that is {} from the {} side of row {} is {} meters too long.".format(group.id,
+                                                                                                                     group.entry,
+                                                                                                                     group.rep,
+                                                                                                                     group.start_code.number_within_row,
+                                                                                                                     'south',
+                                                                                                                     group.start_code.row, 
+                                                                                                                     length_difference)
             num_bad_lengths += 1
         else:
             num_good_lengths += 1
@@ -464,7 +477,7 @@ if __name__ == '__main__':
         avg_item.size = (avg_width, avg_height)
         avg_output_items.append(avg_item)
     print 'Output averaged {} items'.format(len(avg_output_items))
-    export_results(avg_output_items, avg_results_filepath)
+    export_results(avg_output_items, rows, avg_results_filepath)
     print "Exported averaged results to " + avg_results_filepath
 
     # Pickle

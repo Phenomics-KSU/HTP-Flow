@@ -333,50 +333,69 @@ def lateral_and_projection_distance_2d(p, a, b):
     
     return lateral_error, a_to_b_traveled_mag
  
-def export_results(items, out_filepath):
+def export_results(items, rows, out_filepath):
     '''Write all items to results file.'''
-    with open(out_filepath, 'w') as out_file:
+    with open(out_filepath, 'wb') as out_file:
+        writer = csv.writer(out_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+
         # Write out header
-        out_file.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(
+        writer.writerow([
                'Type',
                'Name',
                'Entry',
                'Rep',
-               'Field#',
-               'Row#',
+               '# In Field',
+               '# In Row',
+               'Direction',
                'Row',
                'Range',
+               'E',
+               'N',
+               'U',
                'Easting',
                'Northing',
                'Altitude',
                'UTM-Zone',
                'Image Name',
-               'Parent Image Name'))
+               'Parent Image Name'])
 
         for item in items:
             
             has_group = hasattr(item, 'group') and item.group is not None
             
-            if not has_group and item.type == 'Plant':
-                continue # don't write out plants outside of a grouping
-            
-            entry = item.group.entry if has_group else ''
-            rep = item.group.rep if has_group else ''
+            #entry = item.group.entry if has_group else ''
+            #rep = item.group.rep if has_group else ''
+            entry = item.entry if hasattr(item, 'entry') else ''
+            rep = item.rep if hasattr(item, 'rep') else ''
 
-            out_file.write('{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n'.format(
+            # TODO cleanup 
+            if hasattr(item, 'row_number'):
+                item.row = item.row_number
+
+            # Row properties
+            row_direction = 'N/A'
+            row = [row for row in rows if row.number == item.row]
+            if len(row) > 0:
+                row_direction = row[0].direction
+
+            writer.writerow([
                            item.type,
                            item.name,
                            entry,
                            rep,
-                           'TODO', # num within field
-                           'TODO', # num within row
+                           item.number_within_field,
+                           item.number_within_row,
+                           row_direction,
                            item.row,
                            item.range,
+                           item.field_position[0],
+                           item.field_position[1],
+                           item.field_position[2],
                            item.position[0],
                            item.position[1],
                            item.position[2],
                            'TODO', # UTM-Zone
                            os.path.split(item.image_path)[1],
-                           os.path.split(item.parent_image_filename)[1]))
+                           os.path.split(item.parent_image_filename)[1]])
 
     return out_filepath

@@ -5,6 +5,7 @@ import os
 import argparse
 import pickle
 import time
+import csv
 
 # non-default import
 import numpy as np
@@ -31,29 +32,31 @@ if __name__ == '__main__':
         rows = pickle.load(input_file)
         print 'Loaded {} rows from {}'.format(len(rows), input_filepath)
     
+    rows = sorted(rows, key=lambda r: r.number)
+    
     current_field_item_num = 1
     ordered_items = []
     for row in rows:
-        items = []
+        row_items = []
         for i, segment in enumerate(row.group_segments):
-            items.append(segment.start_code)
-            items += segment.items
+            row_items.append(segment.start_code)
+            row_items += segment.items
             if i == len(row.group_segments) - 1:
-                items.append(segment.end_code) # since on last segment it won't show up in next segment
+                row_items.append(segment.end_code) # since on last segment it won't show up in next segment
                 
-            # Get everything going in the 'up' direction
-            if row.direction == 'back':
-                items.reverse()
+        # Get everything going in the 'up' direction
+        if row.direction == 'back':
+            row_items.reverse()
+        
+        # Reverse items in even row numbers for serpentine ordering    
+        if row.number % 2 == 0:
+            row_items.reverse()
             
-            # Reverse items in even row numbers for serpentine ordering    
-            if i % 2 == 0:
-                items.reverse()
-                
-            for item_num_in_row, item in enumerate(items):
-                item.number_within_field = current_field_item_num
-                item.number_within_row = item_num_in_row + 1 # index off 1 instead of 0
-                ordered_items.append(item)
-                current_field_item_num += 1
+        for item_num_in_row, item in enumerate(row_items):
+            item.number_within_field = current_field_item_num
+            item.number_within_row = item_num_in_row + 1 # index off 1 instead of 0
+            ordered_items.append(item)
+            current_field_item_num += 1
                 
     items = ordered_items
     
@@ -67,8 +70,10 @@ if __name__ == '__main__':
         print "No group codes. Exiting"
         sys.exit(1)
         
-    if first_group_code.name != '930':
-        print "First group code is {} and should be {}. Exiting".format(first_group_code.name, '930')
+    expected_first_group_code = '930'
+    if first_group_code.name != expected_first_group_code:
+        expected_first_group_code_actual_index = [item.name for item in items].index(expected_first_group_code)
+        print "First group code is {0} and should be {1}. {1} actually has an index of {2}. Exiting".format(first_group_code.name, expected_first_group_code, expected_first_group_code_actual_index)
         sys.exit(1)
                 
     first_position = first_group_code.position
@@ -91,7 +96,7 @@ if __name__ == '__main__':
     all_output_items = []
     for item in items:
         all_output_items.extend([item] + item.other_items)
-    export_results(all_output_items, all_results_filepath)
+    export_results(all_output_items, rows, all_results_filepath)
     print "Exported all results to " + all_results_filepath
     
     # Write averaged results out to file.
@@ -111,6 +116,5 @@ if __name__ == '__main__':
         avg_item.size = (avg_width, avg_height)
         avg_output_items.append(avg_item)
     print 'Output averaged {} items'.format(len(avg_output_items))
-    export_results(avg_output_items, avg_results_filepath)
+    export_results(avg_output_items, rows, avg_results_filepath)
     print "Exported averaged results to " + avg_results_filepath
-    

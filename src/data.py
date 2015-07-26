@@ -119,7 +119,7 @@ class RowCode(FieldItem):
         '''Constructor.'''
         super(RowCode, self).__init__(*args, **kwargs)
         self.row_number = int(self.name[2:])
-        #self.row = self.row_number # TODO cleanup to avoid multiple references of the same thing
+        self.row = self.row_number # TODO cleanup to avoid multiple references of the same thing
         
 class PlantGroupSegment(object):
     '''Part of a plant grouping. Hit end of row before entire grouping could be planted.'''

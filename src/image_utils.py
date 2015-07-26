@@ -101,13 +101,13 @@ def parse_grouping_file(group_filename):
             if len(fields) == 0:
                 continue
             try:
-                order_entered = fields[0]
+                order_entered = int(fields[0])
                 qr_id = fields[1]
                 flag = fields[2] # just entry x rep combined
                 entry = fields[3]
                 rep = fields[4].upper()
                 estimated_num_plants = int(fields[5])
-                groups.append((qr_id, entry, rep, estimated_num_plants))
+                groups.append((qr_id, entry, rep, estimated_num_plants, order_entered))
             except (IndexError, ValueError):
                 print 'Bad line: {0}'.format(line) 
                 continue
