@@ -131,6 +131,7 @@ class PlantGroupSegment(object):
         self.group = None # group that segment belongs to.
         self.start_code = start_code # QR code to start segment. Could either be Row or Group Code depending on if segment is starting or ending.
         self.end_code = end_code # QR code that ends segment. Could either be Row or Group Code depending on if segment is starting or ending.
+        self.expected_num_plants = -1 # how many plants should be in segment. negative if not sure.
 
     def update_group(self, new_group):
         '''Update the grouping that this segment belongs to and update the reference of all the items stored in the segment.'''
@@ -164,7 +165,7 @@ class PlantGroup(object):
     def __init__(self):
         '''Constructor.'''
         self.segments = []
-        self.expected_num_plants = -1 # how many plants should be in rows. negative if not sure.
+        self.expected_num_plants = -1 # how many plants should be in group. negative if not sure.
 
     def add_segment(self, segment):
         segment.update_group(self)
