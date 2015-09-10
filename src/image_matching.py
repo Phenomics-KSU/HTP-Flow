@@ -62,6 +62,8 @@ if __name__ == '__main__':
     log_contents = []
     with open(image_log, 'r') as input_file:
         for line in input_file.readlines():
+            if line.strip().startswith('#'):
+                continue # comment line
             items = [i.strip() for i in line.split(',')]
             if len(items) != 2:
                 continue
@@ -69,7 +71,7 @@ if __name__ == '__main__':
             image_filename = items[1]
             log_contents.append((utc_time, image_filename))
             
-    print "Read in {} timestamped image names from image log.".format(len(log_contents))
+    print "Read in {} time stamped image names from image log.".format(len(log_contents))
             
     print 'Sorting log contents by time stamp.'
     log_contents = sorted(log_contents, key=lambda c: c[0])

@@ -271,6 +271,15 @@ def is_same_item(item1, item2, max_position_difference):
     
     return True # Similar enough
 
+def is_same_position_item(item1, item2, max_position_difference):
+    if item1.name != item2.name:
+        return False
+    
+    # convert from cm to meters
+    max_position_difference /= 100.0
+    
+    return position_difference(item1.position, item2.position) < max_position_difference
+
 def cap_angle_plus_minus_180_deg(angle):
     '''Return angle in range of (-180, 180]'''
     while angle <= -180.0:
