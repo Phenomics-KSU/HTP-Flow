@@ -6,7 +6,7 @@ import argparse
 import ExifTags
 import Image
 import time
-#import exifread
+import exifread
 
 def is_number(s):
     '''Return true if s is a number.'''
@@ -19,7 +19,7 @@ def is_number(s):
 if __name__ == '__main__':
     '''Rename and optionally move images.'''
 
-    default_recursive = True
+    default_recursive = 'true'
     parser = argparse.ArgumentParser(description='Rename and optionally move images.')
     parser.add_argument('input_directory', help='Where to search for files to rename.')
     parser.add_argument('output_directory', help='Where to move all renamed files. If \'none\' then renamed files will not be moved.')
@@ -57,12 +57,16 @@ if __name__ == '__main__':
     
     number_renamed = 0 # How many images are successfully renamed
     
-    for filepath in image_filepaths:
+    for filepath_idx, filepath in enumerate(image_filepaths):
         
         original_directory, original_filename = os.path.split(filepath)
         
+        print "Processing {} [{}/{}]".format(original_filename, filepath_idx + 1, len(image_filepaths))
+        
         # Extract camera serial number and capture date/time from EXIF metadata so we can use it for renaming image.
         with open(filepath, 'rb') as f:
+            # old using ExifTags.  Doesn't work with CR2
+            '''
             try:
                 img = Image.open(f)
             except IOError as e:
@@ -71,8 +75,17 @@ if __name__ == '__main__':
             exif = img._getexif()
             cam_serial_number = exif[42033]
             datetime_original = exif[36867]
+            '''
+            exif_tags = exifread.process_file(f)
+            #for key, value in exif_tags.iteritems():
+                #if 'serial' in key.lower():
+                    #print (key, value)
+                #if 'time' in key.lower():
+                    #print (key, value)
+            cam_serial_number = str(exif_tags['EXIF BodySerialNumber']).strip()
+            datetime_original = str(exif_tags['EXIF DateTimeOriginal']).strip()
             datetime_original = time.strptime(datetime_original, "%Y:%m:%d %H:%M:%S")
-            del img
+            #del img
         
         #epoch_seconds = time.mktime(datetime_original)
 
