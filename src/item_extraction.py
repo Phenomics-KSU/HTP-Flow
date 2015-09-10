@@ -104,7 +104,7 @@ class QRLocator:
             scan_successful = len(qr_data) != 0
 
             if scan_successful:
-                
+
                 qr_code = create_qr_code(qr_data[0], rectangle) 
                 
                 if qr_code is None:
@@ -209,7 +209,7 @@ class PlantLocator:
         upper_green = np.array([green_hue + 30, 255, 255], np.uint8)
         plant_mask = cv2.inRange(hsv_image, lower_green, upper_green)
         
-      # Now do the same thing for greenish dead plants.
+        # Now do the same thing for greenish dead plants.
         lower_dead_green = np.array([10, 35, 60], np.uint8)
         upper_dead_green = np.array([90, 255, 255], np.uint8)
         dead_green_plant_mask = cv2.inRange(hsv_image, lower_dead_green, upper_dead_green)
@@ -269,6 +269,74 @@ class PlantLocator:
                 drawRect(marked_image, rectangle, blue, thickness=2)
         
         return plants
+
+class BlueStickLocator:
+    '''Locates blue sticks that are inserted into center of plants.'''
+    def __init__(self, stick_length, stick_diameter):
+        '''Constructor.  Sizes should be in centimeters.'''
+        self.stick_length = stick_length
+        self.stick_diameter = stick_diameter
+    
+    def locate(self, geo_image, image, marked_image):
+        '''Find sticks in image and return list of FieldItem instances.''' 
+        # Extract out just blue channel from BGR image.
+        #blue_channel, _, _ = cv2.split(image)
+        #_, mask = cv2.threshold(blue_channel, 160, 255, 0)
+        
+        # Convert Blue-Green-Red color space to HSV
+        hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        
+        lower_blue = np.array([90, 90, 50], np.uint8)
+        upper_blue = np.array([130, 255, 255], np.uint8)
+        mask = cv2.inRange(hsv_image, lower_blue, upper_blue)
+        
+        # Night time testing
+        lower_blue = np.array([90, 10, 5], np.uint8)
+        upper_blue = np.array([142, 255, 255], np.uint8)
+        mask = cv2.inRange(hsv_image, lower_blue, upper_blue)
+
+        filtered_rectangles = []
+        
+        # Open mask (to remove noise) and then dilate it to connect contours.
+        kernel = np.ones((5,5), np.uint8)
+        mask_open = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        mask = cv2.dilate(mask_open, kernel, iterations = 1)
+        
+        # Find outer contours (edges) and 'approximate' them to reduce the number of points along nearly straight segments.
+        contours, hierarchy = cv2.findContours(mask.copy(), cv2.cv.CV_RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        #contours = [cv2.approxPolyDP(contour, .1, True) for contour in contours]
+        
+        # Create bounding box for each contour.
+        bounding_rectangles = [cv2.minAreaRect(contour) for contour in contours]
+        
+        if marked_image is not None:
+            for rectangle in bounding_rectangles:
+                # Show rectangles using bounding box.
+                drawRect(marked_image, rectangle, (0,0,0), thickness=2)
+        
+        # Remove any rectangles that couldn't be a plant based off specified size.
+        min_stick_size = self.stick_diameter * 0.75 # looking straight down on it
+        max_stick_size = self.stick_length * 1.25 # laying flat on the ground
+        filtered_rectangles.extend(filter_by_size(bounding_rectangles, geo_image.resolution, min_stick_size, max_stick_size, enforce_min_on_w_and_h=True))
+        
+        if ImageWriter.level <= ImageWriter.DEBUG:
+            # Debug save intermediate images
+            mask_filename = postfix_filename(geo_image.file_name, 'blue_thresh')
+            ImageWriter.save_debug(mask_filename, mask)
+        
+        if marked_image is not None:
+            for rectangle in filtered_rectangles:
+                # Show rectangles using colored bounding box.
+                purple = (255, 0, 255)
+                drawRect(marked_image, rectangle, purple, thickness=2)
+
+        sticks = []
+        for i, rectangle in enumerate(filtered_rectangles):
+            # Just give default name for saving image until we later go through and assign to plant group.
+            stick = FieldItem(name = 'stick' + str(i), bounding_rect = rectangle)
+            sticks.append(stick)
+                
+        return sticks
 
 def filter_by_size(bounding_rects, resolution, min_size, max_size, enforce_min_on_w_and_h=True):
     '''Return list of rectangles that are within min/max size (specified in centimeters)'''
@@ -354,6 +422,10 @@ def calculate_position(item, geo_image):
     
 def create_qr_code(qr_data, bounding_rect):
     '''Return either GroupCode or RowCode depending on qr data.  Return None if neither.'''
+    
+    if qr_data == '22a':
+        qr_data = '1'
+    
     if qr_data[:2] == 'R.' and qr_data[2:].isdigit():
         qr_item = RowCode(name = qr_data)
     else:
