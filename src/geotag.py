@@ -62,20 +62,22 @@ def geotag_all_readings_closest(readings, offsets, position_times, positions, or
     for reading in readings:
         reading_time = reading[0]
         reading_data = reading[1:]
-        reading_position, reading_orientation = closests_pose_by_time(reading_time, reading_data, position_times, positions, orientation_times, orientations)
+        reading_position = closest_position_by_time(reading_time, reading_data, position_times, positions)
+        reading_orientation = closest_orientation_by_time(reading_time, reading_data, orientation_times, orientations)
         geotagged_reading = geotag(reading_time, reading_data, reading_position, reading_orientation, offsets)
         geotagged_readings.append(geotagged_reading)
 
     return geotagged_readings
 
-def closests_pose_by_time(reading_time, reading_data, position_times, positions, orientation_times, orientations):
+def closest_position_by_time(reading_time, reading_data, position_times, positions):
     ''''''
-    position = closests_value(reading_time, position_times, positions)
-    orientation = closests_value(reading_time, orientation_times, orientations)
-    
-    return position, orientation
+    return closest_value(reading_time, position_times, positions)
 
-def closests_value(x_value, x_set, y_set, i1=None):
+def closest_orientation_by_time(reading_time, reading_data, orientation_times, orientations):
+    ''''''
+    return closest_value(reading_time, orientation_times, orientations)
+
+def closest_value(x_value, x_set, y_set, i1=None):
     '''
     Return y corresponding to x_value such that it matches with the closest value in x_set. 
     If i1 isn't None then it's treated as the rightmost index in x_set where x_set[i1] is less than or equal to x_value.
@@ -114,36 +116,43 @@ def geotag_all_readings_interpolate(readings, offsets, position_times, positions
     z_list = [position[2] for position in positions]
     positions_by_axes = [x_list, y_list, z_list]
 
-    angle1_list = [orientation[0] for orientation in orientations]
-    angle2_list = [orientation[1] for orientation in orientations]
-    angle3_list = [orientation[2] for orientation in orientations]
-    orientations_by_axes = [angle1_list, angle2_list, angle3_list]
+    print "Only interpolating position.  Using closest time for orientation."
+    #angle1_list = [orientation[0] for orientation in orientations]
+    #angle2_list = [orientation[1] for orientation in orientations]
+    #angle3_list = [orientation[2] for orientation in orientations]
+    #orientations_by_axes = [angle1_list, angle2_list, angle3_list]
     
     geotagged_readings = []
     for reading in readings:
         reading_time = reading[0]
         reading_data = reading[1:]
-        reading_position, reading_orientation = interpolate_pose(reading_time, reading_data, position_times, positions_by_axes, orientation_times, orientations_by_axes)
+        reading_position = interpolate_position(reading_time, reading_data, position_times, positions_by_axes)
+        reading_orientation = closest_orientation_by_time(reading_time, reading_data, orientation_times, orientations)
         geotagged_reading = geotag(reading_time, reading_data, reading_position, reading_orientation, offsets)
         geotagged_readings.append(geotagged_reading)
-
+        
     return geotagged_readings
 
-def interpolate_pose(reading_time, reading_data, position_times, positions_by_axes, orientation_times, orientations_by_axes):
+def interpolate_position(reading_time, reading_data, position_times, positions_by_axes):
     ''''''
-    print "Interpolation not currently supported for orientation. Exiting"
-    sys.exit(1)
     time_index = find_less_than_or_equal(position_times, reading_time)  
     x = interpolate(reading_time, position_times, positions_by_axes[0], i1=time_index)
     y = interpolate(reading_time, position_times, positions_by_axes[1], i1=time_index)
     z = interpolate(reading_time, position_times, positions_by_axes[2], i1=time_index)
+
+    return (x,y,z)
+
+def interpolate_orientation(reading_time, reading_data, orientation_times, orientations_by_axes):
+    ''''''
+    print "Interpolation not currently supported for orientation. Exiting"
+    sys.exit(1)
 
     orientation_index = find_less_than_or_equal(orientation_times, reading_time)
     angle1 = interpolate(reading_time, orientation_times, orientations_by_axes[0], i1=orientation_index)
     angle2 = interpolate(reading_time, orientation_times, orientations_by_axes[1], i1=orientation_index)
     angle3 = interpolate(reading_time, orientation_times, orientations_by_axes[2], i1=orientation_index)
     
-    return ((x,y,z), (angle1,angle2,angle3))
+    return (angle1,angle2,angle3)
 
 def interpolate(x_value, x_set, y_set, i1=None):
     '''
@@ -168,7 +177,7 @@ def interpolate(x_value, x_set, y_set, i1=None):
     
     if x_value == x_set[i1]:
         # don't need to interpolate since match exactly.
-        return y_set[i] 
+        return y_set[i1] 
     
     # i2 is the index of the element in x_set right after x_value.
     # at this point x_set[i1] can't be equal to x_set[i2] or else
@@ -247,7 +256,7 @@ if __name__ == '__main__':
     print 'Reading in positions from {}'.format(position_filename)
     position_filepath = os.path.join(input_directory, position_filename)
     with open(position_filepath) as position_file:
-        positions = [line.replace(',',' ').split() for line in position_file.readlines()]
+        positions = [line.replace(',',' ').split() for line in position_file.readlines() if not line.strip().startswith('#')]
         positions = [[float(i) for i in position[:4]] for position in positions]
     print 'Read {} positions'.format(len(positions))
     
@@ -263,8 +272,9 @@ if __name__ == '__main__':
     print 'Reading in orientation from {}'.format(orientation_filename)
     orientation_filepath = os.path.join(input_directory, orientation_filename)
     with open(orientation_filepath) as orientation_file:
-        orientations = [line.replace(',',' ').split() for line in orientation_file.readlines()]
-        orientations = [[float(i) for i in orientation] for orientation in orientations]
+        orientations = [line.replace(',',' ').split() for line in orientation_file.readlines() if not line.strip().startswith('#')]
+        print '\n'
+        orientations = [[float(i) for i in orientation[:4]] for orientation in orientations]
     print 'Read {} orientations'.format(len(orientations))
     
     print "Sorting orientations by time."
@@ -282,7 +292,7 @@ if __name__ == '__main__':
         print 'Reading in sensor data from {}'.format(sensor_filename)
         sensor_filepath = os.path.join(input_directory, sensor_filename)
         with open(sensor_filepath) as sensor_file:
-            sensor_data = [line.replace(',',' ').split() for line in sensor_file.readlines()]
+            sensor_data = [line.replace(',',' ').split() for line in sensor_file.readlines() if not line.strip().startswith('#')]
             for data in sensor_data:
                 # Convert time to float.
                 data[0] = float(data[0])
