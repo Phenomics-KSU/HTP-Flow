@@ -107,10 +107,10 @@ if __name__ == '__main__':
 
     # Extract all QR items from images.
     for i, geo_image in enumerate(geo_images):
-            print "Analyzing image {0} [{1}/{2}]".format(geo_image.file_name, i+1, len(geo_images))
-            geo_image.items = process_geo_image(geo_image, item_extractor, camera_rotation, image_directory, out_directory, use_marked_image)
-            for code in geo_image.items:
-                print "Found code: {}".format(code.name)
+        print "Analyzing image {0} [{1}/{2}]".format(geo_image.file_name, i+1, len(geo_images))
+        geo_image.items = process_geo_image(geo_image, item_extractor, camera_rotation, image_directory, out_directory, use_marked_image)
+        for code in geo_image.items:
+            print "Found code: {}".format(code.name)
   
     dump_filename = "stage1_geoimages_{}.txt".format(int(geo_images[0].image_time))
     dump_filepath = os.path.join(out_directory, dump_filename)
